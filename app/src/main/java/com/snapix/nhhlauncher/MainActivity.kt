@@ -19,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -26,6 +29,14 @@ import java.util.zip.ZipInputStream
 private const val PREFS = "nhh"
 private const val GAME_DIR = "game"
 private const val NHH_EXE = "NHH.exe"
+
+private enum class SetupStage(val label: String) {
+    EXTRACTING("Extracting the ZIP…"),
+    ANALYSING("Analysing folders and subfolders…"),
+    FOUND("NHH.exe found"),
+    BOOTSTRAP("Install and setup Winlator essentials"),
+    FINISHING("Please wait till the Bootstrap finishes its setup…")
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,35 +51,96 @@ private fun NhhApp(context: Context) {
     var gameExe by remember { mutableStateOf(prefs.getString("game_exe", null)) }
     var error by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf(false) }
+    var setupStage by remember { mutableStateOf<SetupStage?>(null) }
+    val scope = rememberCoroutineScope()
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    lateinit var picker: androidx.activity.result.ActivityResultLauncher<Array<String>>
+    fun selectZip() {
+        error = null
+        settings = false
+        picker.launch(arrayOf("application/zip", "application/octet-stream"))
+    }
+
+    picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
-        try {
-            val exe = importGameZip(context, uri)
-            prefs.edit().putString("game_exe", exe.absolutePath).apply()
-            gameExe = exe.absolutePath
-            error = null
-        } catch (e: Exception) {
-            error = e.message ?: "Could not import the game ZIP."
+
+        scope.launch {
+            try {
+                setupStage = SetupStage.EXTRACTING
+                val result = importGameZip(context, uri) { stage ->
+                    setupStage = stage
+                }
+
+                setupStage = SetupStage.BOOTSTRAP
+                // Real Winlator bootstrap is wired here after the native runtime is vendored.
+                setupStage = SetupStage.FINISHING
+                withContext(Dispatchers.IO) { Thread.sleep(250) }
+
+                prefs.edit().putString("game_exe", result.absolutePath).apply()
+                gameExe = result.absolutePath
+                error = null
+                setupStage = null
+            } catch (t: Throwable) {
+                setupStage = null
+                error = t.message ?: "Could not import the game ZIP."
+            }
         }
     }
 
-    MaterialTheme {
-        Surface(Modifier.fillMaxSize(), color = Color(0xFF0B0B0B)) {
+    MaterialExpressiveTheme(
+        colorScheme = darkColorScheme(
+            background = Color(0xFF0B0B0B),
+            surface = Color(0xFF111111),
+            primary = Color.White,
+            onPrimary = Color.Black,
+            onBackground = Color.White,
+            onSurface = Color.White
+        )
+    ) {
+        Surface(Modifier.fillMaxSize()) {
             when {
+                setupStage != null -> SetupProgressScreen(setupStage!!)
                 settings -> SettingsScreen(
                     onBack = { settings = false },
-                    onReimport = { picker.launch(arrayOf("application/zip", "application/octet-stream")) }
+                    onReimport = { selectZip() }
                 )
                 gameExe == null -> SetupScreen(
                     error = error,
-                    onSelectZip = { picker.launch(arrayOf("application/zip", "application/octet-stream")) }
+                    onSelectZip = { selectZip() }
                 )
                 else -> MainMenu(
-                    onRun = { error = "Winlator runtime integration is the next milestone." },
+                    onRun = {
+                        error = "Winlator native runtime is not bundled yet. RUN GAME is enabled after Wine/Box64/XServer integration."
+                    },
                     onSettings = { settings = true }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SetupProgressScreen(stage: SetupStage) {
+    Box(
+        Modifier.fillMaxSize().padding(28.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(72.dp),
+                strokeWidth = 6.dp
+            )
+            Spacer(Modifier.height(28.dp))
+            Text(stage.label, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Do not close NHH Launcher.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFFAAAAAA)
+            )
         }
     }
 }
@@ -82,15 +154,14 @@ private fun SetupScreen(error: String?, onSelectZip: () -> Unit) {
     ) {
         Poster()
         Spacer(Modifier.height(28.dp))
-        Text("NHH Launcher", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+        Text("NHH Launcher", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
-        Text("Select your NHH game ZIP to set up the launcher.", color = Color(0xFFAAAAAA))
+        Text(
+            "Select your NHH game ZIP to set up the launcher.",
+            color = Color(0xFFAAAAAA)
+        )
         Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = onSelectZip,
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
-        ) { Text("SELECT GAME ZIP") }
+        Button(onClick = onSelectZip) { Text("SELECT GAME ZIP") }
         error?.let {
             Spacer(Modifier.height(16.dp))
             Text(it, color = Color(0xFFFF6B6B))
@@ -109,15 +180,13 @@ private fun MainMenu(onRun: () -> Unit, onSettings: () -> Unit) {
         Spacer(Modifier.height(26.dp))
         Button(
             onClick = onRun,
-            Modifier.fillMaxWidth().height(54.dp),
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+            Modifier.fillMaxWidth().height(58.dp)
         ) { Text("RUN GAME") }
         Spacer(Modifier.height(10.dp))
         TextButton(onClick = onSettings) {
             Icon(Icons.Default.Settings, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("SETTINGS", color = Color.White)
+            Text("SETTINGS")
         }
     }
 }
@@ -126,18 +195,18 @@ private fun MainMenu(onRun: () -> Unit, onSettings: () -> Unit) {
 private fun SettingsScreen(onBack: () -> Unit, onReimport: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Settings", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Text("Settings", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onBack) { Text("DONE") }
         }
         Spacer(Modifier.height(20.dp))
-        Text("Controls", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Text("Controls", style = MaterialTheme.typography.titleMedium)
         Text("Touch, Xbox controller and keyboard mapping.", color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(18.dp))
-        Text("Graphics", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Text("Graphics", style = MaterialTheme.typography.titleMedium)
         Text("Renderer, resolution and graphics options.", color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(18.dp))
-        Text("Compatibility", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Text("Compatibility", style = MaterialTheme.typography.titleMedium)
         Text("Wine, Box64 and diagnostics.", color = Color(0xFFAAAAAA))
         Spacer(Modifier.height(28.dp))
         Button(onClick = onReimport) { Text("RE-IMPORT GAME ZIP") }
@@ -149,37 +218,70 @@ private fun Poster() {
     Box(
         Modifier.fillMaxWidth().aspectRatio(0.72f).background(
             Brush.verticalGradient(listOf(Color(0xFF292929), Color(0xFF0E0E0E))),
-            RoundedCornerShape(14.dp)
+            RoundedCornerShape(28.dp)
         ),
         contentAlignment = Alignment.Center
-    ) { Text("NHH", color = Color.White, style = MaterialTheme.typography.displayLarge) }
+    ) {
+        Text("NHH", style = MaterialTheme.typography.displayLarge)
+    }
 }
 
-private fun importGameZip(context: Context, uri: Uri): File {
+private suspend fun importGameZip(
+    context: Context,
+    uri: Uri,
+    onStage: (SetupStage) -> Unit
+): File = withContext(Dispatchers.IO) {
+    val stagingDir = File(context.filesDir, "$GAME_DIR.staging")
     val gameDir = File(context.filesDir, GAME_DIR)
-    if (gameDir.exists()) gameDir.deleteRecursively()
-    gameDir.mkdirs()
 
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        ZipInputStream(input.buffered()).use { zip ->
-            val root = gameDir.canonicalFile
-            var entry = zip.nextEntry
-            while (entry != null) {
-                val target = File(gameDir, entry.name).canonicalFile
-                if (!target.path.startsWith(root.path + File.separator) && target != root) {
-                    throw IllegalArgumentException("Invalid ZIP path.")
+    if (stagingDir.exists()) stagingDir.deleteRecursively()
+    stagingDir.mkdirs()
+
+    try {
+        onStage(SetupStage.EXTRACTING)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            ZipInputStream(input.buffered()).use { zip ->
+                val root = stagingDir.canonicalFile
+                var entry = zip.nextEntry
+
+                while (entry != null) {
+                    val target = File(stagingDir, entry.name).canonicalFile
+                    if (!target.path.startsWith(root.path + File.separator) && target != root) {
+                        throw IllegalArgumentException("Invalid ZIP path.")
+                    }
+
+                    if (entry.isDirectory) {
+                        target.mkdirs()
+                    } else {
+                        target.parentFile?.mkdirs()
+                        FileOutputStream(target).use { output ->
+                            zip.copyTo(output, DEFAULT_BUFFER_SIZE)
+                        }
+                    }
+
+                    zip.closeEntry()
+                    entry = zip.nextEntry
                 }
-                if (entry.isDirectory) target.mkdirs()
-                else {
-                    target.parentFile?.mkdirs()
-                    FileOutputStream(target).use { output -> zip.copyTo(output) }
-                }
-                zip.closeEntry()
-                entry = zip.nextEntry
             }
-        }
-    } ?: throw IllegalArgumentException("Could not read the selected ZIP.")
+        } ?: throw IllegalArgumentException("Could not read the selected ZIP.")
 
-    return gameDir.walkTopDown().firstOrNull { it.isFile && it.name.equals(NHH_EXE, true) }
-        ?: throw IllegalArgumentException("NHH.exe was not found in the selected ZIP.")
+        onStage(SetupStage.ANALYSING)
+        val exe = stagingDir.walkTopDown()
+            .firstOrNull { it.isFile && it.name.equals(NHH_EXE, ignoreCase = true) }
+            ?: throw IllegalArgumentException("NHH.exe was not found in the selected ZIP.")
+
+        onStage(SetupStage.FOUND)
+
+        val relativeExe = exe.relativeTo(stagingDir).path
+        if (gameDir.exists()) gameDir.deleteRecursively()
+        if (!stagingDir.renameTo(gameDir)) {
+            throw IllegalStateException("Could not finalize the extracted game files.")
+        }
+
+        File(gameDir, relativeExe).takeIf { it.exists() }
+            ?: throw IllegalStateException("NHH.exe disappeared while finalizing the install.")
+    } catch (t: Throwable) {
+        stagingDir.deleteRecursively()
+        throw t
+    }
 }

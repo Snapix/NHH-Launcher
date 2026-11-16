@@ -43,6 +43,7 @@ private enum class SetupStage(val label: String) {
 
 class MainActivity : com.winlator.MainActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        intent.putExtra("nhh_launcher", true)
         super.onCreate(savedInstanceState)
         setContent { NhhApp(applicationContext, this) }
     }

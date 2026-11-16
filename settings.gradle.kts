@@ -6,4 +6,5 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "NHH-Launcher"
-include(":app")
+include(":app", ":winlator")
+project(":winlator").projectDir = file("winlator-app/app")

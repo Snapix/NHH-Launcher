@@ -87,7 +87,7 @@ private fun NhhApp(context: Context) {
         }
     }
 
-    MaterialExpressiveTheme(
+    MaterialTheme(
         colorScheme = darkColorScheme(
             background = Color(0xFF0B0B0B),
             surface = Color(0xFF111111),

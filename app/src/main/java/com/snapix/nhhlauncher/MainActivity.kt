@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -24,16 +26,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import java.util.zip.ZipInputStream
 
 private const val PREFS = "nhh"
 private const val GAME_DIR = "game"
-private const val NHH_EXE = "NHH.exe"
 
 private enum class SetupStage(val label: String) {
     EXTRACTING("Extracting the ZIP…"),
     ANALYSING("Analysing folders and subfolders…"),
     FOUND("NHH.exe found"),
+    BOOTSTRAP("Install and setup Winlator essentials"),
+    SELECT_EXE("Select the game executable"),
     BOOTSTRAP("Install and setup Winlator essentials"),
     FINISHING("Please wait till the Bootstrap finishes its setup…")
 }
@@ -52,6 +56,9 @@ private fun NhhApp(context: Context) {
     var error by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf(false) }
     var setupStage by remember { mutableStateOf<SetupStage?>(null) }
+    var setupProgress by remember { mutableFloatStateOf(0f) }
+    var setupDetail by remember { mutableStateOf("") }
+    var exeChoices by remember { mutableStateOf<List<String>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
     lateinit var picker: androidx.activity.result.ActivityResultLauncher<Array<String>>
@@ -67,9 +74,20 @@ private fun NhhApp(context: Context) {
         scope.launch {
             try {
                 setupStage = SetupStage.EXTRACTING
-                val result = importGameZip(context, uri) { stage ->
-                    setupStage = stage
-                }
+                val result = importGameZip(
+                    context,
+                    uri,
+                    onProgress = { stage, progress, detail ->
+                        setupStage = stage
+                        setupProgress = progress
+                        setupDetail = detail
+                    },
+                    onNeedsExeSelection = { choices ->
+                        exeChoices = choices
+                    }
+                )
+
+                if (result == null) return@launch
 
                 setupStage = SetupStage.BOOTSTRAP
                 // Real Winlator bootstrap is wired here after the native runtime is vendored.
@@ -99,7 +117,31 @@ private fun NhhApp(context: Context) {
     ) {
         Surface(Modifier.fillMaxSize()) {
             when {
-                setupStage != null -> SetupProgressScreen(setupStage!!)
+                setupStage == SetupStage.SELECT_EXE -> ExeSelectionScreen(
+                    choices = exeChoices,
+                    onSelect = { relativePath ->
+                        scope.launch {
+                            try {
+                                val selected = finalizeSelectedExe(context, relativePath)
+                                prefs.edit().putString("game_exe", selected.absolutePath).apply()
+                                gameExe = selected.absolutePath
+                                setupStage = SetupStage.BOOTSTRAP
+                                withContext(Dispatchers.IO) { Thread.sleep(250) }
+                                setupStage = SetupStage.FINISHING
+                                withContext(Dispatchers.IO) { Thread.sleep(250) }
+                                setupStage = null
+                            } catch (t: Throwable) {
+                                setupStage = null
+                                error = t.message ?: "Could not select the executable."
+                            }
+                        }
+                    },
+                    onCancel = {
+                        setupStage = null
+                        error = "No game executable was selected."
+                    }
+                )
+                setupStage != null -> SetupProgressScreen(setupStage!!, setupProgress, setupDetail)
                 settings -> SettingsScreen(
                     onBack = { settings = false },
                     onReimport = { selectZip() }
@@ -120,7 +162,7 @@ private fun NhhApp(context: Context) {
 }
 
 @Composable
-private fun SetupProgressScreen(stage: SetupStage) {
+private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: String) {
     Box(
         Modifier.fillMaxSize().padding(28.dp),
         contentAlignment = Alignment.Center
@@ -135,6 +177,22 @@ private fun SetupProgressScreen(stage: SetupStage) {
             )
             Spacer(Modifier.height(28.dp))
             Text(stage.label, style = MaterialTheme.typography.titleLarge)
+            if (stage == SetupStage.EXTRACTING) {
+                Spacer(Modifier.height(18.dp))
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                )
+                Spacer(Modifier.height(8.dp))
+                Text((progress * 100).toInt().toString() + "% extracted", style = MaterialTheme.typography.labelLarge)
+                if (detail.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(detail, style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAAAAA))
+                }
+            } else if (detail.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(detail, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAAAAAA))
+            }
             Spacer(Modifier.height(10.dp))
             Text(
                 "Do not close NHH Launcher.",
@@ -229,21 +287,41 @@ private fun Poster() {
 private suspend fun importGameZip(
     context: Context,
     uri: Uri,
-    onStage: (SetupStage) -> Unit
-): File = withContext(Dispatchers.IO) {
+    onProgress: suspend (SetupStage, Float, String) -> Unit,
+    onNeedsExeSelection: (List<String>) -> Unit
+): File? = withContext(Dispatchers.IO) {
     val stagingDir = File(context.filesDir, "$GAME_DIR.staging")
     val gameDir = File(context.filesDir, GAME_DIR)
 
     if (stagingDir.exists()) stagingDir.deleteRecursively()
     stagingDir.mkdirs()
 
+    suspend fun progress(stage: SetupStage, value: Float, detail: String = "") {
+        withContext(Dispatchers.Main.immediate) {
+            onProgress(stage, value, detail)
+        }
+    }
+
     try {
-        onStage(SetupStage.EXTRACTING)
+        progress(SetupStage.EXTRACTING, 0f, "Preparing ZIP…")
+
+        var totalBytes = 0L
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            ZipInputStream(input.buffered()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    if (!entry.isDirectory && entry.size > 0) totalBytes += entry.size
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+        } ?: throw IllegalArgumentException("Could not read the selected ZIP.")
+
+        var extractedBytes = 0L
         context.contentResolver.openInputStream(uri)?.use { input ->
             ZipInputStream(input.buffered()).use { zip ->
                 val root = stagingDir.canonicalFile
                 var entry = zip.nextEntry
-
                 while (entry != null) {
                     val target = File(stagingDir, entry.name).canonicalFile
                     if (!target.path.startsWith(root.path + File.separator) && target != root) {
@@ -255,7 +333,17 @@ private suspend fun importGameZip(
                     } else {
                         target.parentFile?.mkdirs()
                         FileOutputStream(target).use { output ->
-                            zip.copyTo(output, DEFAULT_BUFFER_SIZE)
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val read = zip.read(buffer)
+                                if (read < 0) break
+                                output.write(buffer, 0, read)
+                                extractedBytes += read
+                                val fraction = if (totalBytes > 0) {
+                                    (extractedBytes.toDouble() / totalBytes).toFloat().coerceIn(0f, 1f)
+                                } else 0f
+                                progress(SetupStage.EXTRACTING, fraction, entry.name)
+                            }
                         }
                     }
 
@@ -265,23 +353,99 @@ private suspend fun importGameZip(
             }
         } ?: throw IllegalArgumentException("Could not read the selected ZIP.")
 
-        onStage(SetupStage.ANALYSING)
-        val exe = stagingDir.walkTopDown()
-            .firstOrNull { it.isFile && it.name.equals(NHH_EXE, ignoreCase = true) }
-            ?: throw IllegalArgumentException("NHH.exe was not found in the selected ZIP.")
+        progress(SetupStage.EXTRACTING, 1f, "Extraction complete")
+        progress(SetupStage.ANALYSING, 0f, "Searching folders and subfolders…")
 
-        onStage(SetupStage.FOUND)
+        val executables = stagingDir.walkTopDown()
+            .filter { it.isFile && it.extension.equals("exe", ignoreCase = true) }
+            .toList()
 
-        val relativeExe = exe.relativeTo(stagingDir).path
-        if (gameDir.exists()) gameDir.deleteRecursively()
-        if (!stagingDir.renameTo(gameDir)) {
-            throw IllegalStateException("Could not finalize the extracted game files.")
+        val preferred = executables.firstOrNull {
+            it.name.lowercase(Locale.ROOT) == "nhh.exe"
+        } ?: executables.firstOrNull {
+            it.name.lowercase(Locale.ROOT) == "nhh_build.exe"
         }
 
-        File(gameDir, relativeExe).takeIf { it.exists() }
-            ?: throw IllegalStateException("NHH.exe disappeared while finalizing the install.")
+        progress(
+            SetupStage.ANALYSING,
+            1f,
+            executables.size.toString() + " executable(s) found"
+        )
+
+        if (preferred == null) {
+            if (executables.isEmpty()) {
+                throw IllegalArgumentException("No .exe file was found in the extracted game files.")
+            }
+
+            withContext(Dispatchers.Main.immediate) {
+                onNeedsExeSelection(executables.map { it.relativeTo(stagingDir).path })
+            }
+            progress(SetupStage.SELECT_EXE, 1f, "Choose the game executable")
+            return@withContext null
+        }
+
+        progress(SetupStage.FOUND, 1f, preferred.name + " found")
+        finalizeGameInstall(context, preferred.relativeTo(stagingDir).path)
     } catch (t: Throwable) {
         stagingDir.deleteRecursively()
         throw t
+    }
+}
+
+private suspend fun finalizeSelectedExe(context: Context, relativePath: String): File =
+    withContext(Dispatchers.IO) {
+        finalizeGameInstall(context, relativePath)
+    }
+
+private fun finalizeGameInstall(context: Context, relativePath: String): File {
+    val stagingDir = File(context.filesDir, "$GAME_DIR.staging")
+    val gameDir = File(context.filesDir, GAME_DIR)
+    val selected = File(stagingDir, relativePath).canonicalFile
+    val root = stagingDir.canonicalFile
+
+    if (!selected.path.startsWith(root.path + File.separator) || !selected.isFile) {
+        throw IllegalArgumentException("Invalid executable selection.")
+    }
+
+    if (gameDir.exists()) gameDir.deleteRecursively()
+    if (!stagingDir.renameTo(gameDir)) {
+        throw IllegalStateException("Could not finalize the extracted game files.")
+    }
+
+    return File(gameDir, relativePath).takeIf { it.isFile }
+        ?: throw IllegalStateException("The selected executable disappeared while finalizing the install.")
+}
+
+@Composable
+private fun ExeSelectionScreen(
+    choices: List<String>,
+    onSelect: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().padding(24.dp)) {
+        Text("Select game executable", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "NHH.exe or NHH_build.exe was not found automatically. Select the correct .exe below.",
+            color = Color(0xFFAAAAAA)
+        )
+        Spacer(Modifier.height(18.dp))
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(choices) { path ->
+                Button(
+                    onClick = { onSelect(path) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(path)
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            Text("CANCEL")
+        }
     }
 }

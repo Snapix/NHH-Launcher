@@ -54,7 +54,7 @@ object WinlatorRuntime {
             withContext(Dispatchers.Main.immediate) {
                 onProgress(0.05f, "Installing Winlator system files…")
             }
-            RootFSInstaller.installIfNeeded(activity)
+            withContext(Dispatchers.Main.immediate) { RootFSInstaller.installIfNeeded(activity) }
             var waited = 0L
             while (!rootFS.isValid() || rootFS.getVersion() < ROOTFS_VERSION) {
                 delay(250)

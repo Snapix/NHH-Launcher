@@ -29,7 +29,7 @@ object WinlatorRuntime {
     private const val CONTAINER_NAME = "NHH"
     private const val GAME_DRIVE = "G"
 
-    private const val ROOTFS_VERSION = 23
+    private val ROOTFS_VERSION = RootFSInstaller.LATEST_VERSION.toInt()
 
     suspend fun prepare(
         activity: MainActivity,

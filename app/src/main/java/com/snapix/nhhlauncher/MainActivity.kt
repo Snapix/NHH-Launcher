@@ -160,7 +160,7 @@ private fun NhhApp(context: Context, activity: MainActivity) {
                             try {
                                 setupStage = SetupStage.BOOTSTRAP
                                 setupDetail = "Checking Winlator runtime…"
-                                WinlatorRuntime.ensureReady(activity, File(gameExe!!), prefs) { progress, detail ->
+                                WinlatorRuntime.ensureReady(activity, File(gameExe!!), prefs, onProgress = { progress, detail ->
                                     setupProgress = progress
                                     setupDetail = detail
                                 }

@@ -16,4 +16,19 @@ sed -i "/^[[:space:]]*applicationId /d" "$WINLATOR_APP/build.gradle"
 sed -i "s/classpath 'com.android.tools.build:gradle:8.4.2'/classpath 'com.android.tools.build:gradle:8.13.2'/" "winlator-app/build.gradle"
 sed -i "s/compileSdk 35/compileSdk 36/" "$WINLATOR_APP/build.gradle"
 
+MAIN_ACTIVITY="$WINLATOR_APP/src/main/java/com/winlator/MainActivity.java"
+python3 - "$MAIN_ACTIVITY" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+needle = "        super.onCreate(savedInstanceState);\n"
+guard = "        if (getIntent().getBooleanExtra(\"nhh_launcher\", false)) return;\n"
+if guard not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate Winlator MainActivity onCreate")
+    s = s.replace(needle, needle + guard, 1)
+    p.write_text(s)
+PY
+
 echo "Winlator runtime prepared as Android library."

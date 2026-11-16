@@ -7,7 +7,8 @@
         android:label="NHH Launcher"
         android:allowBackup="false"
         android:supportsRtl="true"
-        android:isGame="true">
+        android:isGame="true"
+        tools:replace="android:label">
 
         <activity
             android:name=".MainActivity"
@@ -22,7 +23,8 @@
         <activity
             android:name="com.winlator.MainActivity"
             tools:node="merge"
-            android:exported="false">
+            android:exported="false"
+            tools:replace="android:exported">
             <intent-filter tools:node="removeAll" />
         </activity>
     </application>

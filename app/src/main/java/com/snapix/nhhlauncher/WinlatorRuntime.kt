@@ -86,7 +86,7 @@ object WinlatorRuntime {
             onProgress(0.45f, "Creating the NHH Winlator container…")
         }
 
-        val container = createContainer(manager)
+        val container = createContainer(manager, activity)
 
         withContext(Dispatchers.Main.immediate) {
             onProgress(0.70f, "Mounting the game into Wine as drive G:…")
@@ -115,7 +115,8 @@ object WinlatorRuntime {
     }
 
     private suspend fun createContainer(
-        manager: ContainerManager
+        manager: ContainerManager,
+        activity: Context
     ): com.winlator.container.Container = suspendCancellableCoroutine { continuation ->
         val data = JSONObject().apply {
             put("name", CONTAINER_NAME)
@@ -123,7 +124,7 @@ object WinlatorRuntime {
             put("envVars", Container.DEFAULT_ENV_VARS)
             put("cpuList", "")
             put("cpuListWoW64", "")
-            put("graphicsDriver", GraphicsDrivers.DEFAULT_VULKAN_DRIVER + "," + GraphicsDrivers.DEFAULT_OPENGL_DRIVER)
+            put("graphicsDriver", GraphicsDrivers.getDefaultDriver(activity))
             put("dxwrapper", Container.DEFAULT_DXWRAPPER)
             put("dxwrapperConfig", "")
             put("graphicsDriverConfig", "")

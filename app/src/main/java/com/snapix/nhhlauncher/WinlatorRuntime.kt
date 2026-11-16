@@ -148,11 +148,11 @@ object WinlatorRuntime {
         if (!desktopDir.isDirectory()) desktopDir.mkdirs()
 
         val shortcut = File(desktopDir, "NHH.desktop")
-        val dosPath = "G:\\\\" + relativeExe.replace("/", "\\\\")
+        val dosPath = "G:\\" + relativeExe.replace("/", "\\")
         val content = buildString {
             append("[Desktop Entry]\n")
             append("Name=No Hero's Here\n")
-            append("Exec=wine " + dosPath + "\\n")
+            append("Exec=wine " + dosPath + "\n")
             append("Type=Application\n")
             append("StartupNotify=false\n")
             append("\n[Extra Data]\n")

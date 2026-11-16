@@ -76,7 +76,7 @@ object WinlatorRuntime {
         val manager = ContainerManager(activity)
         val oldId = prefs.getInt(PREF_CONTAINER_ID, 0)
         val oldShortcut = prefs.getString(PREF_SHORTCUT, null)
-        val oldContainer = if (oldId > 0) manager.getContainerById(oldId) else null
+        val oldContainer = if (oldId > 0) manager.getContainers().firstOrNull { it.id == oldId } else null
 
         if (!forceRebuild && oldContainer != null && oldShortcut != null && File(oldShortcut).isFile) {
             return@withContext

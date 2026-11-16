@@ -86,7 +86,7 @@ object WinlatorRuntime {
             onProgress(0.45f, "Creating the NHH Winlator container…")
         }
 
-        val container = createContainer(manager, activity, gameExe.parentFile ?: File(activity.filesDir, "game"))
+        val container = createContainer(manager)
 
         withContext(Dispatchers.Main.immediate) {
             onProgress(0.70f, "Mounting the game into Wine as drive G:…")
@@ -94,7 +94,8 @@ object WinlatorRuntime {
 
         // Do not copy the game a second time. Winlator's drive mapping can point
         // directly at the launcher-private game directory.
-        container.setDrives(Container.DEFAULT_DRIVES + GAME_DRIVE + ":" + gameExe.parentFile!!.absolutePath)
+        val gameRoot = File(activity.filesDir, "game")
+        container.setDrives(Container.DEFAULT_DRIVES + GAME_DRIVE + ":" + gameRoot.absolutePath)
         container.saveData()
 
         val shortcut = createGameShortcut(container, relativeExe)
@@ -114,9 +115,7 @@ object WinlatorRuntime {
     }
 
     private suspend fun createContainer(
-        manager: ContainerManager,
-        context: Context,
-        gameDir: File
+        manager: ContainerManager
     ): com.winlator.container.Container = suspendCancellableCoroutine { continuation ->
         val data = JSONObject().apply {
             put("name", CONTAINER_NAME)

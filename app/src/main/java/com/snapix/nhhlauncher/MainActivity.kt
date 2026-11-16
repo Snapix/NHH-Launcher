@@ -36,7 +36,6 @@ private enum class SetupStage(val label: String) {
     EXTRACTING("Extracting the ZIP…"),
     ANALYSING("Analysing folders and subfolders…"),
     FOUND("NHH.exe found"),
-    BOOTSTRAP("Install and setup Winlator essentials"),
     SELECT_EXE("Select the game executable"),
     BOOTSTRAP("Install and setup Winlator essentials"),
     FINISHING("Please wait till the Bootstrap finishes its setup…")

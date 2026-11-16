@@ -163,7 +163,7 @@ private fun NhhApp(context: Context, activity: MainActivity) {
                                 WinlatorRuntime.ensureReady(activity, File(gameExe!!), prefs, onProgress = { progress, detail ->
                                     setupProgress = progress
                                     setupDetail = detail
-                                }
+                                })
                                 setupStage = null
                                 WinlatorRuntime.launchGame(activity, prefs)
                             } catch (t: Throwable) {

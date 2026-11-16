@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Winlator runtime source is pinned as a Git submodule.
+
 WINLATOR_APP="winlator-app/app"
 
 if [[ ! -d "$WINLATOR_APP" ]]; then

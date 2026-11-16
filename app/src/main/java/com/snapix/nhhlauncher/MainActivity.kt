@@ -302,8 +302,15 @@ private suspend fun importGameZip(
         var lastUiUpdateNanos = 0L
         var lastUiBytes = 0L
 
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            ZipInputStream(input.buffered(1024 * 1024)).use { zip ->
+        // Android document providers may lazily create a Handler. Opening the
+        // provider stream from Dispatchers.IO can throw "Can't create handler
+        // inside thread". Open it on main, then perform ZIP I/O on the worker.
+        val input = withContext(Dispatchers.Main.immediate) {
+            context.contentResolver.openInputStream(uri)
+        } ?: throw IllegalArgumentException("Could not read the selected ZIP.")
+
+        input.use {
+            ZipInputStream(it.buffered(1024 * 1024)).use { zip ->
                 val root = stagingDir.canonicalFile
                 val buffer = ByteArray(1024 * 1024)
                 var entry = zip.nextEntry
@@ -345,7 +352,7 @@ private suspend fun importGameZip(
                     entry = zip.nextEntry
                 }
             }
-        } ?: throw IllegalArgumentException("Could not read the selected ZIP.")
+        }
 
         progress(SetupStage.EXTRACTING, 1f, "Extraction complete")
         progress(SetupStage.ANALYSING, 0f, "Searching folders and subfolders…")

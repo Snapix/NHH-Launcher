@@ -12,8 +12,8 @@ android {
         applicationId = "com.snapix.nhhlauncher"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
     }
 
     buildFeatures { compose = true }
@@ -31,6 +31,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":winlator"))
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")

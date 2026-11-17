@@ -7,16 +7,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -104,14 +109,16 @@ private fun NhhApp(context: Context, activity: MainActivity) {
         }
     }
 
-    MaterialTheme(
+    MaterialExpressiveTheme(
         colorScheme = darkColorScheme(
-            background = Color(0xFF0B0B0B),
-            surface = Color(0xFF111111),
-            primary = Color.White,
-            onPrimary = Color.Black,
-            onBackground = Color.White,
-            onSurface = Color.White
+            background = Color(0xFF19181D),
+            surface = Color(0xFF242328),
+            surfaceContainer = Color(0xFF29282E),
+            primary = Color(0xFFFFB82E),
+            onPrimary = Color(0xFF2A1800),
+            secondary = Color(0xFFB9D98A),
+            onBackground = Color(0xFFF5F2F7),
+            onSurface = Color(0xFFF5F2F7)
         )
     ) {
         Surface(Modifier.fillMaxSize()) {
@@ -207,29 +214,61 @@ private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: Stri
 
 @Composable
 private fun SetupScreen(error: String?, onSelectZip: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 30.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Poster()
         Spacer(Modifier.height(28.dp))
-        Text("NHH Launcher", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(8.dp))
-        Text("Select your NHH game ZIP to set up the launcher.", color = Color(0xFFAAAAAA))
+        Text("NHH Launcher", style = MaterialTheme.typography.displaySmall)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Select your NHH game ZIP to set up the launcher.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color(0xFFC5C2C8)
+        )
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onSelectZip) { Text("SELECT GAME ZIP") }
+        Button(
+            onClick = onSelectZip,
+            modifier = Modifier.fillMaxWidth().height(64.dp),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Icon(Icons.Default.Description, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Text("SELECT GAME ZIP", style = MaterialTheme.typography.titleMedium)
+        }
         error?.let {
             Spacer(Modifier.height(16.dp))
-            Text(it, color = Color(0xFFFF6B6B))
+            Text(it, color = MaterialTheme.colorScheme.error)
         }
     }
 }
 
 @Composable
 private fun MainMenu(onRun: () -> Unit, onSettings: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Poster()
-        Spacer(Modifier.height(26.dp))
-        Button(onClick = onRun, Modifier.fillMaxWidth().height(58.dp)) { Text("RUN GAME") }
-        Spacer(Modifier.height(10.dp))
-        TextButton(onClick = onSettings) {
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onRun,
+            modifier = Modifier.fillMaxWidth().height(64.dp),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Icon(Icons.Default.SportsEsports, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Text("RUN GAME", style = MaterialTheme.typography.titleMedium)
+        }
+        Spacer(Modifier.height(8.dp))
+        FilledTonalButton(
+            onClick = onSettings,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
             Icon(Icons.Default.Settings, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("SETTINGS")
@@ -270,12 +309,43 @@ private fun SettingsScreen(
 @Composable
 private fun Poster() {
     Box(
-        Modifier.fillMaxWidth().aspectRatio(0.72f).background(
-            Brush.verticalGradient(listOf(Color(0xFF292929), Color(0xFF0E0E0E))),
-            RoundedCornerShape(28.dp)
-        ),
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(0.75f)
+            .clip(RoundedCornerShape(30.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF49B8F2), Color(0xFF7CD5FF), Color(0xFF5D743B), Color(0xFF26301B))
+                )
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(30.dp)),
         contentAlignment = Alignment.Center
-    ) { Text("NHH", style = MaterialTheme.typography.displayLarge) }
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("NHH", style = MaterialTheme.typography.displayLarge, color = Color(0xFFE92B1B))
+            Surface(color = Color(0xFFF5D65C), shape = RoundedCornerShape(22.dp)) {
+                Text(
+                    "HEROES",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = Color(0xFF247B36)
+                )
+            }
+            Text("HERE", style = MaterialTheme.typography.displayMedium, color = Color(0xFFE92B1B))
+            Spacer(Modifier.height(28.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                listOf(Color(0xFFB83E2B), Color(0xFFF2A13A), Color(0xFF5A9A3A), Color(0xFF3280B6)).forEach {
+                    Box(Modifier.size(58.dp).clip(RoundedCornerShape(50)).background(it))
+                }
+            }
+        }
+        Text(
+            "NO HERO'S HERE",
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White.copy(alpha = 0.82f)
+        )
+    }
 }
 
 private suspend fun importGameZip(

@@ -190,4 +190,12 @@ object WinlatorRuntime {
         }
         context.startActivity(intent)
     }
+
+    fun openInputControls(context: Context) {
+        val intent = Intent(context, WinlatorMainActivity::class.java).apply {
+            putExtra("edit_input_controls", true)
+            putExtra("selected_profile_id", 3)
+        }
+        context.startActivity(intent)
+    }
 }

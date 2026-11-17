@@ -130,4 +130,41 @@ s = s[:m.start()] + "\n" + replacement + s[m.end():]
 p.write_text(s)
 PY
 
+# Fix an upstream threading bug exposed by embedding Winlator. RootFSInstaller
+# extracts on an executor, then its success path constructs ContainerManager,
+# whose Handler must be created on an Android Looper.
+ROOTFS_INSTALLER="$WINLATOR_APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
+python3 - "$ROOTFS_INSTALLER" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+old = """            if (success) {
+                rootFS.createRFSVersionFile(LATEST_VERSION);
+                resetContainerRFSVersions(activity);
+            }
+            else AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+
+            dialog.closeOnUiThread();"""
+new = """            if (success) {
+                // RootFS extraction runs on a worker. ContainerManager creates an
+                // Android Handler, so post-install bookkeeping must run on the
+                // Activity's Looper.
+                activity.runOnUiThread(() -> {
+                    rootFS.createRFSVersionFile(LATEST_VERSION);
+                    resetContainerRFSVersions(activity);
+                    dialog.closeOnUiThread();
+                });
+            }
+            else {
+                activity.runOnUiThread(() -> {
+                    AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                    dialog.closeOnUiThread();
+                });
+            }"""
+if old not in s:
+    raise SystemExit("RootFSInstaller success block not found")
+p.write_text(s.replace(old, new, 1))
+PY
+
 echo "Prepared the full Winlator application with the NHH launcher front-end."

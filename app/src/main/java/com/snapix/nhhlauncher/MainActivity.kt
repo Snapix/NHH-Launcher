@@ -155,7 +155,8 @@ private fun NhhApp(context: Context, activity: MainActivity) {
                     onBack = { settings = false },
                     onReimport = { selectZip() },
                     onWinlatorSettings = { WinlatorRuntime.openGlobalSettings(activity) },
-                    onContainerSettings = { WinlatorRuntime.openContainerSettings(activity) }
+                    onContainerSettings = { WinlatorRuntime.openContainerSettings(activity) },
+                    onInputControls = { WinlatorRuntime.openInputControls(activity) }
                 )
                 gameExe == null || !File(gameExe!!).isFile -> SetupScreen(
                     error = error,
@@ -281,7 +282,8 @@ private fun SettingsScreen(
     onBack: () -> Unit,
     onReimport: () -> Unit,
     onWinlatorSettings: () -> Unit,
-    onContainerSettings: () -> Unit
+    onContainerSettings: () -> Unit,
+    onInputControls: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -299,6 +301,8 @@ private fun SettingsScreen(
         Button(onClick = onWinlatorSettings, modifier = Modifier.fillMaxWidth()) { Text("WINLATOR GLOBAL SETTINGS") }
         Spacer(Modifier.height(10.dp))
         Button(onClick = onContainerSettings, modifier = Modifier.fillMaxWidth()) { Text("WINLATOR CONTAINER SETTINGS") }
+        Spacer(Modifier.height(10.dp))
+        Button(onClick = onInputControls, modifier = Modifier.fillMaxWidth()) { Text("INPUT CONTROLS") }
         Spacer(Modifier.height(22.dp))
         Text("Game", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(10.dp))

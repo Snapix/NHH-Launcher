@@ -167,4 +167,19 @@ if old not in s:
 p.write_text(s.replace(old, new, 1))
 PY
 
+# Winlator's async container callbacks are created from executor threads during
+# bootstrap/container setup. Android's Handler() constructor requires a Looper on
+# the current thread, so bind these callbacks explicitly to the main Looper.
+CONTAINER_MANAGER="$WINLATOR_APP/src/main/java/com/winlator/container/ContainerManager.java"
+python3 - "$CONTAINER_MANAGER" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+if "import android.os.Looper;" not in s:
+    s = s.replace("import android.os.Handler;\n", "import android.os.Handler;\nimport android.os.Looper;\n", 1)
+s = s.replace("new Handler()", "new Handler(Looper.getMainLooper())")
+p.write_text(s)
+PY
+
 echo "Prepared the full Winlator application with the NHH launcher front-end."

@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.*
-import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,7 +108,7 @@ private fun NhhApp(context: Context, activity: MainActivity) {
         }
     }
 
-    MaterialExpressiveTheme(
+    MaterialTheme(
         colorScheme = darkColorScheme(
             background = Color(0xFF19181D),
             surface = Color(0xFF242328),

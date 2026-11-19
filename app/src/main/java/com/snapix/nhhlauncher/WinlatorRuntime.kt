@@ -14,6 +14,7 @@ import com.winlator.container.GraphicsDrivers
 import com.winlator.core.WineThemeManager
 import com.winlator.xenvironment.RootFS
 import com.winlator.xenvironment.RootFSInstaller
+import com.winlator.inputcontrols.InputControlsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -108,7 +109,7 @@ object WinlatorRuntime {
         val rootFS = RootFS.find(activity)
         if (!rootFS.isValid() || rootFS.getVersion() < rootfsVersion) {
             withContext(Dispatchers.Main.immediate) {
-                onProgress(0.05f, "Installing Winlator system files…")
+                onProgress(0.02f, "Installing system files…")
                 RootFSInstaller.installIfNeeded(activity)
             }
 
@@ -117,16 +118,20 @@ object WinlatorRuntime {
                 delay(300)
                 waited += 300
                 if (waited > 15 * 60 * 1000L) {
-                    throw IllegalStateException("Winlator Bootstrap did not finish. Check the system-files installation.")
+                    throw IllegalStateException("Winlator Bootstrap did not finish. Check the launcher diagnostics.")
                 }
-                if (waited % 1200L < 300L) {
-                    withContext(Dispatchers.Main.immediate) {
-                        onProgress(0.08f, "Installing Winlator system files… " + (waited / 1000L).toString() + "s")
-                    }
+                val installProgress = RootFSInstaller.getNhhInstallProgress()
+                if (installProgress < 0) {
+                    throw IllegalStateException("Winlator system-file installation failed.")
+                }
+                withContext(Dispatchers.Main.immediate) {
+                    val fraction = if (installProgress > 0) installProgress / 100f else 0.02f
+                    onProgress(fraction.coerceIn(0.02f, 0.38f), "Installing system files… " + installProgress + "%")
                 }
             }
         }
 
+        val controlsProfileId = ensureControlsProfile(activity)
         val manager = ContainerManager(activity)
         val oldId = prefs.getInt(PREF_CONTAINER_ID, 0)
         val oldContainer = if (oldId > 0) manager.getContainerById(oldId) else null
@@ -134,7 +139,10 @@ object WinlatorRuntime {
         if (!forceRebuild && oldContainer != null) {
             mapGameDrive(oldContainer, gameRoot)
             oldContainer.saveData()
-            prefs.edit().putString(PREF_GAME_PATH, canonicalExe.absolutePath).apply()
+            prefs.edit()
+                .putString(PREF_GAME_PATH, canonicalExe.absolutePath)
+                .putInt(PREF_CONTROLS_PROFILE, controlsProfileId)
+                .apply()
             withContext(Dispatchers.Main.immediate) {
                 onProgress(1f, "Winlator container verified.")
             }
@@ -157,7 +165,7 @@ object WinlatorRuntime {
         prefs.edit()
             .putInt(PREF_CONTAINER_ID, container.id)
             .putString(PREF_GAME_PATH, canonicalExe.absolutePath)
-            .putInt(PREF_CONTROLS_PROFILE, 3)
+            .putInt(PREF_CONTROLS_PROFILE, controlsProfileId)
             .apply()
 
         if (oldContainer != null && oldContainer.id != container.id) {
@@ -180,6 +188,14 @@ object WinlatorRuntime {
             .toMutableList()
         driveEntries.add(GAME_DRIVE + ":" + canonicalRoot.absolutePath)
         container.setDrives(driveEntries.joinToString(separator = ""))
+    }
+
+    private fun ensureControlsProfile(context: Context): Int {
+        val manager = InputControlsManager(context)
+        val profile = manager.getProfile(3)
+            ?: throw IllegalStateException("The built-in Virtual Gamepad profile is missing from the Winlator runtime.")
+        profile.loadControllers()
+        return profile.id
     }
 
     private suspend fun createContainer(

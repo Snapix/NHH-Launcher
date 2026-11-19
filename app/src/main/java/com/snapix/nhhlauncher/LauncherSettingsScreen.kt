@@ -261,7 +261,7 @@ private fun InfoCard() {
 private fun SettingsGroup(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    content: @Composable Column.() -> Unit
+    content: @Composable () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),

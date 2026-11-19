@@ -3,6 +3,7 @@ package com.snapix.nhhlauncher
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import com.winlator.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts

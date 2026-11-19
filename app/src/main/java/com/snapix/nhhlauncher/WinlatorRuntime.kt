@@ -208,7 +208,7 @@ object WinlatorRuntime {
             resolution = container.screenSize,
             vulkanDriver = drivers.getOrNull(0) ?: GraphicsDrivers.DEFAULT_VULKAN_DRIVER,
             openGlDriver = drivers.getOrNull(1) ?: GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
-            dxWrapper = container.dxwrapper,
+            dxWrapper = container.getDXWrapper(),
             audioDriver = container.audioDriver,
             box64Preset = container.box64Preset,
             wineEsync = env != "0",

@@ -165,7 +165,7 @@ p.write_text(s)
 PY
 
 # Patch the small NHH in-game menu with a real Cast action.
- so NHH owns the progress UI instead of showing the
+ # Patch Winlator bootstrap so NHH owns the progress UI instead of showing the
 # upstream centered installation dialog.
 ROOTFS_INSTALLER="$WINLATOR_APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
 python3 - "$ROOTFS_INSTALLER" <<'PY'

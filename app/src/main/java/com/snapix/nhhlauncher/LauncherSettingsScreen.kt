@@ -102,7 +102,7 @@ internal fun LauncherSettingsScreen(
         Button(
             onClick = onSave,
             enabled = !isSaving,
-            Modifier.fillMaxWidth().height(56.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Accent)
         ) {

@@ -97,7 +97,7 @@ private fun SettingsHome(
         }
         items(SettingsCategory.entries) { c -> CategoryCard(c, settings, onClick = { onCategory(c) }) }
         item {
-            Button(onClick = onSave, enabled = !isSaving, Modifier.fillMaxWidth().height(58.dp), shape = RoundedCornerShape(20.dp)) {
+            Button(onClick = onSave, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(58.dp), shape = RoundedCornerShape(20.dp)) {
                 Text(if (isSaving) "SAVING…" else "SAVE ALL CHANGES")
             }
         }
@@ -329,6 +329,6 @@ private fun SettingsCategoryPage(
     OutlinedTextField(value=value, onValueChange=onChange, label={Text(label)}, supportingText={if(supporting.isNotBlank()) Text(supporting)}, modifier=Modifier.fillMaxWidth(), minLines=1, maxLines=5, shape=RoundedCornerShape(17.dp))
 }
 
-@Composable private fun NumberField(label:String, value:String, onChange:(String)->Unit) {
-    OutlinedTextField(value=value, onValueChange=onChange, label={Text(label)}, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), modifier=Modifier.weight(1f), shape=RoundedCornerShape(17.dp), singleLine=true)
+@Composable private fun NumberField(label:String, value:String, onChange:(String)->Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
+    OutlinedTextField(value=value, onValueChange=onChange, label={Text(label)}, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), modifier=modifier, shape=RoundedCornerShape(17.dp), singleLine=true)
 }

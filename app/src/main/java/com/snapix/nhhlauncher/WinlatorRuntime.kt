@@ -168,7 +168,7 @@ object WinlatorRuntime {
                 .putInt(PREF_CONTROLS_PROFILE, controlsProfileId)
                 .apply()
             onProgress(1f, "Winlator container verified.")
-            return@withContext
+            return
         }
 
         onProgress(0.42f, "Creating the NHH Winlator container…")

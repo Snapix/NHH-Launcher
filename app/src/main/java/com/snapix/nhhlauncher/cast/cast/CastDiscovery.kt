@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
+import android.net.wifi.WifiManager
 import com.snapix.nhhlauncher.cast.util.logD
 import com.snapix.nhhlauncher.cast.util.logE
 import com.snapix.nhhlauncher.cast.util.logI
@@ -22,6 +23,9 @@ class CastDiscovery(context: Context) {
     private val devices = mutableMapOf<String, CastDevice>()
     private val _flow = MutableStateFlow<List<CastDevice>>(emptyList())
     val flow: StateFlow<List<CastDevice>> = _flow
+
+    private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     private val listener = object : NsdManager.DiscoveryListener {
         override fun onDiscoveryStarted(type: String) { logI("mDNS discovery started ($type)") }
@@ -70,6 +74,35 @@ class CastDiscovery(context: Context) {
         logI("resolved: $friendly @ $host:${info.port}")
     }
 
-    fun start() = nsd.discoverServices("_googlecast._tcp", NsdManager.PROTOCOL_DNS_SD, listener)
-    fun stop() = runCatching { nsd.stopServiceDiscovery(listener) }
+    fun start() {
+        acquireMulticastLock()
+        runCatching {
+            nsd.discoverServices("_googlecast._tcp", NsdManager.PROTOCOL_DNS_SD, listener)
+        }.onFailure {
+            logE("mDNS discovery could not start: " + it.message)
+            releaseMulticastLock()
+        }
+    }
+
+    fun stop() {
+        runCatching { nsd.stopServiceDiscovery(listener) }
+        releaseMulticastLock()
+    }
+
+    private fun acquireMulticastLock() {
+        if (multicastLock?.isHeld == true) return
+        multicastLock = runCatching {
+            wifiManager.createMulticastLock("NHHLauncherCast").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }.onFailure {
+            logW("Could not acquire Wi-Fi multicast lock: " + it.message)
+        }.getOrNull()
+    }
+
+    private fun releaseMulticastLock() {
+        runCatching { multicastLock?.release() }
+        multicastLock = null
+    }
 }

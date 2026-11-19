@@ -102,7 +102,12 @@ object WinlatorRuntime {
         onProgress: (Float, String) -> Unit,
         forceRebuild: Boolean = false
     ) = setupLock.withLock {
-        withContext(Dispatchers.IO) {
+        // Winlator's Android-side managers (ContainerManager/InputControlsManager)
+        // may create Handlers internally. They must be called from a Looper-backed
+        // thread. The previous implementation wrapped the entire runtime setup in
+        // Dispatchers.IO, which caused:
+        // "Can't create handler inside thread ... that has not called Looper.prepare()".
+        // Keep Winlator API calls on the main thread; long waits use suspend delay.
         val canonicalExe = gameExe.canonicalFile
         val gameRoot = File(activity.filesDir, "game").canonicalFile
         require(canonicalExe.isFile) { "The selected NHH executable no longer exists." }
@@ -113,10 +118,8 @@ object WinlatorRuntime {
         var rootFS = RootFS.find(activity)
         if (!rootFS.isValid() || rootFS.getVersion() < rootfsVersion) {
             appendLaunchLog(activity, "Winlator rootfs missing/outdated. Starting bootstrap.")
-            withContext(Dispatchers.Main.immediate) {
-                onProgress(0.02f, "Installing system files…")
-                RootFSInstaller.installIfNeeded(activity)
-            }
+            onProgress(0.02f, "Installing system files…")
+            RootFSInstaller.installIfNeeded(activity)
 
             var waited = 0L
             while (true) {
@@ -127,9 +130,7 @@ object WinlatorRuntime {
 
                 if (rootFS.isValid() && rootFS.getVersion() >= rootfsVersion) {
                     appendLaunchLog(activity, "Winlator rootfs bootstrap completed.")
-                    withContext(Dispatchers.Main.immediate) {
-                        onProgress(0.38f, "System files installed.")
-                    }
+                    onProgress(0.38f, "System files installed.")
                     break
                 }
 
@@ -142,17 +143,15 @@ object WinlatorRuntime {
                     throw IllegalStateException("Winlator Bootstrap timed out. Check the launcher diagnostics.")
                 }
 
-                withContext(Dispatchers.Main.immediate) {
-                    val fraction = if (installProgress > 0) installProgress / 100f else 0.02f
-                    onProgress(
-                        fraction.coerceIn(0.02f, 0.38f),
-                        if (installProgress > 0) {
-                            "Installing system files… " + installProgress + "%"
-                        } else {
-                            "Installing system files…"
-                        }
-                    )
-                }
+                val fraction = if (installProgress > 0) installProgress / 100f else 0.02f
+                onProgress(
+                    fraction.coerceIn(0.02f, 0.38f),
+                    if (installProgress > 0) {
+                        "Installing system files… " + installProgress + "%"
+                    } else {
+                        "Installing system files…"
+                    }
+                )
             }
         }
         appendLaunchLog(activity, "Preparing NHH input profile.")
@@ -168,22 +167,16 @@ object WinlatorRuntime {
                 .putString(PREF_GAME_PATH, canonicalExe.absolutePath)
                 .putInt(PREF_CONTROLS_PROFILE, controlsProfileId)
                 .apply()
-            withContext(Dispatchers.Main.immediate) {
-                onProgress(1f, "Winlator container verified.")
-            }
+            onProgress(1f, "Winlator container verified.")
             return@withContext
         }
 
-        withContext(Dispatchers.Main.immediate) {
-            onProgress(0.42f, "Creating the NHH Winlator container…")
-        }
+        onProgress(0.42f, "Creating the NHH Winlator container…")
 
         val container = createContainer(manager, activity)
         appendLaunchLog(activity, "NHH container created: " + container.id)
 
-        withContext(Dispatchers.Main.immediate) {
-            onProgress(0.72f, "Mapping the imported game folder to drive G:…")
-        }
+        onProgress(0.72f, "Mapping the imported game folder to drive G:…")
 
         mapGameDrive(container, gameRoot)
         container.saveData()
@@ -199,10 +192,7 @@ object WinlatorRuntime {
         }
 
         appendLaunchLog(activity, "NHH runtime ready. Container=" + container.id)
-        withContext(Dispatchers.Main.immediate) {
-            onProgress(1f, "Winlator container created. NHH is ready to launch.")
-        }
-    }
+        onProgress(1f, "Winlator container created. NHH is ready to launch.")
     }
 
     private fun mapGameDrive(container: Container, gameRoot: File) {

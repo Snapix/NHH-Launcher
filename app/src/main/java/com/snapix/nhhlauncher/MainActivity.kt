@@ -71,13 +71,7 @@ private fun NhhApp(context: Context, activity: MainActivity) {
     var gameExe by remember { mutableStateOf(prefs.getString(GAME_EXE, null)) }
     var error by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf(false) }
-    var setupStage by remember {
-        mutableStateOf(
-            if (prefs.getBoolean(PREF_SETUP_IN_PROGRESS, false) && !gameExe.isNullOrBlank()) {
-                SetupStage.BOOTSTRAP
-            } else null
-        )
-    }
+    var setupStage by remember { mutableStateOf<SetupStage?>(null) }
     var setupProgress by remember { mutableFloatStateOf(0f) }
     var setupDetail by remember { mutableStateOf("") }
     var exeChoices by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -158,34 +152,8 @@ private fun NhhApp(context: Context, activity: MainActivity) {
         }
     }
 
-    // Recover cleanly if the Winlator bootstrap recreated the Activity.
-    LaunchedEffect(Unit) {
-        if (prefs.getBoolean(PREF_SETUP_IN_PROGRESS, false) && !gameExe.isNullOrBlank()) {
-            try {
-                setupStage = SetupStage.BOOTSTRAP
-                setupProgress = 0.02f
-                setupDetail = "Resuming Winlator system setup…"
-                WinlatorRuntime.ensureReady(
-                    activity,
-                    File(gameExe!!),
-                    prefs,
-                    forceRebuild = false,
-                    onProgress = { progress, detail ->
-                        setupProgress = progress
-                        setupDetail = detail
-                    }
-                )
-                prefs.edit().putBoolean(PREF_SETUP_IN_PROGRESS, false).apply()
-                setupStage = null
-                error = null
-            } catch (t: Throwable) {
-                prefs.edit().putBoolean(PREF_SETUP_IN_PROGRESS, false).apply()
-                setupStage = null
-                error = t.message ?: "Winlator setup did not finish."
-            }
-        }
-    }
-
+    // Setup is persisted. If Android recreates this Activity during bootstrap,
+    // keep the imported executable and let RUN GAME verify/finish the runtime.
     MaterialTheme(
         colorScheme = darkColorScheme(
             background = Color(0xFF160909),
@@ -314,55 +282,23 @@ private fun NhhApp(context: Context, activity: MainActivity) {
 }
 
 @Composable
+@Composable
 private fun LauncherHeader(
     subtitle: String,
     onBack: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color(0xFFFF8A76))
-            }
-            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
         }
-
-        Image(
-            painter = painterResource(R.drawable.nhh_logo),
-            contentDescription = "No Heroes Here",
-            modifier = Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)),
-            contentScale = ContentScale.Crop
-        )
-
-        Spacer(Modifier.width(14.dp))
-
+        Image(painterResource(R.drawable.nhh_logo), "No Heroes Here", Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Surface(color = Color(0xFF4A201E), shape = RoundedCornerShape(50.dp)) {
-                Text(
-                    "NHH LAUNCHER",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                    color = Color(0xFFFF806F),
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-            Spacer(Modifier.height(4.dp))
             Text("No Heroes Here", style = MaterialTheme.typography.headlineSmall)
-            Text(subtitle, color = Color(0xFFCFAFAA), style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, color = Color(0xFFD5BDB8))
         }
-
-        if (onSettings != null) {
-            OutlinedButton(
-                onClick = onSettings,
-                modifier = Modifier.size(width = 72.dp, height = 48.dp),
-                contentPadding = PaddingValues(0.dp),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings")
-            }
-        }
+        if (onSettings != null) IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
     }
 }
 
@@ -463,260 +399,59 @@ private fun SetupSteps(active: Int) {
 }
 
 @Composable
+@Composable
 private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: String) {
-    val extraction = stage == SetupStage.EXTRACTING || stage == SetupStage.ANALYSING ||
-        stage == SetupStage.FOUND || stage == SetupStage.SELECT_EXE
-    val activeStep = if (extraction) 1 else 2
-    val title = if (extraction) "EXTRACTING & VERIFYING" else "INSTALLING SYSTEM FILES"
-    val subtitle = if (extraction) {
-        "Unpacking the game archive and verifying executable files"
-    } else {
-        "Deploying launcher dependencies, libraries & configuration files…"
-    }
-    val status = if (extraction) "Extracting Game Files…" else "Installing System Files…"
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 22.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        LauncherHeader(subtitle = "Game Setup & Launcher")
-
-        HeroBanner(statusText = status, ready = false) {
-            Icon(
-                if (extraction) Icons.Default.HourglassTop else Icons.Default.Build,
-                contentDescription = null,
-                tint = Color(0xFFFFB84F)
-            )
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xE52A1111)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF71332E))
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(5.dp))
-                Text(subtitle, color = Color(0xFFD4B8B2))
-                Spacer(Modifier.height(20.dp))
-
-                Text(
-                    ((progress * 100).toInt().coerceIn(0, 100)).toString() +
-                        "% Complete • " + if (extraction) "Extracting…" else "Installing system files…",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(10.dp)
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    if (detail.isBlank()) "Preparing…" else detail,
-                    color = Color(0xFFD9C1BB),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                if (!extraction) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF63C66B))
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            "Executable verification and runtime setup are being completed.",
-                            color = Color(0xFFBCE6BF),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
+    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LauncherHeader("Setting up game")
+        Image(painterResource(R.drawable.nhh_banner), null, Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(18.dp)), contentScale = ContentScale.Crop)
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF251414)), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(if (stage == SetupStage.BOOTSTRAP || stage == SetupStage.FINISHING) "Preparing runtime" else "Installing game", style = MaterialTheme.typography.titleLarge)
+                Text(detail.ifBlank { stage.label }, color = Color(0xFFD5BDB8))
+                LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, Modifier.fillMaxWidth())
+                Text("${(progress.coerceIn(0f, 1f) * 100).toInt()}%", color = Color(0xFFFF8A76))
             }
-        }
-
-        SetupSteps(active = activeStep)
-
-        if (!extraction) {
-            Text(
-                "Keep the launcher open while Winlator system files are installed. Setup will resume automatically if Android recreates the activity.",
-                color = Color(0xFFB99D97),
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }
 
+@Composable
 @Composable
 private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 22.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        LauncherHeader(subtitle = "Game Setup & Launcher", onBack = onBack)
-
-        HeroBanner(statusText = "Setup Required", ready = false) {
-            Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFFFC15A))
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xE52A1111)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF71332E))
-        ) {
-            Column(
-                Modifier.padding(22.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("SELECT GAME ZIP ARCHIVE", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    "Import your own No Heroes Here game ZIP to set up the launcher.",
-                    color = Color(0xFFD5BCB7)
-                )
-                Spacer(Modifier.height(14.dp))
-                Image(
-                    painter = painterResource(R.drawable.nhh_poster),
-                    contentDescription = "No Heroes Here",
-                    modifier = Modifier.size(width = 150.dp, height = 185.dp).clip(RoundedCornerShape(18.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = onSelectZip,
-                    modifier = Modifier.fillMaxWidth().height(66.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE7352E))
-                ) {
-                    Icon(Icons.Default.FolderOpen, contentDescription = null)
-                    Spacer(Modifier.width(10.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text("SELECT GAME ZIP", style = MaterialTheme.typography.titleMedium)
-                        Text("Tap to browse device storage", style = MaterialTheme.typography.bodySmall)
-                    }
+    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LauncherHeader("Game setup", onBack = onBack)
+        Image(painterResource(R.drawable.nhh_banner), null, Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(18.dp)), contentScale = ContentScale.Crop)
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF251414)), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Game not installed", style = MaterialTheme.typography.titleLarge)
+                Text("Select your No Heroes Here ZIP to install it on this device.", color = Color(0xFFD5BDB8))
+                Button(onClick = onSelectZip, Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(14.dp)) {
+                    Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text("SELECT GAME ZIP")
                 }
-                Spacer(Modifier.height(10.dp))
-                Text("Tap to browse device storage • Required: ~1.2 GB", color = Color(0xFFB99D97))
-            }
-        }
-
-        SetupSteps(active = 0)
-
-        if (!error.isNullOrBlank()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF421B1B)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFFF806F))
-                    Spacer(Modifier.width(10.dp))
-                    Text(error, color = Color(0xFFFFC8C0))
-                }
+                if (!error.isNullOrBlank()) Text(error, color = MaterialTheme.colorScheme.error)
             }
         }
     }
 }
 
 @Composable
-private fun MainMenu(
-    gameExeName: String,
-    error: String?,
-    onBack: () -> Unit,
-    onRun: () -> Unit,
-    onSettings: () -> Unit
-) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 22.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        LauncherHeader(
-            subtitle = "Ready to Play",
-            onBack = onBack,
-            onSettings = onSettings
-        )
-
-        HeroBanner(statusText = "READY TO PLAY  |  " + gameExeName + " verified", ready = true) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFFB9F4BD))
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xE52A1111)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF71332E))
-        ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("GAME LAUNCHER", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "The game setup is complete. Launch and play No Heroes Here.",
-                    color = Color(0xFFD5BCB7)
-                )
-
-                Button(
-                    onClick = onRun,
-                    modifier = Modifier.fillMaxWidth().height(78.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE7352E))
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(30.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text("RUN GAME", style = MaterialTheme.typography.headlineSmall)
-                        Text("Launch " + gameExeName, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-
-                FilledTonalButton(
-                    onClick = onSettings,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Icon(Icons.Default.Gamepad, contentDescription = null)
-                    Spacer(Modifier.width(9.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text("CONTROLS", style = MaterialTheme.typography.titleMedium)
-                        Text("Touch gamepad & controller mapping", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = onSettings,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = null)
-                    Spacer(Modifier.width(9.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
-                        Text("SETTINGS", style = MaterialTheme.typography.titleMedium)
-                        Text("Graphics, audio, display & runtime", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+@Composable
+private fun MainMenu(gameExeName: String, error: String?, onBack: () -> Unit, onRun: () -> Unit, onSettings: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LauncherHeader("Ready to play", onBack = onBack, onSettings = onSettings)
+        Box(Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(18.dp))) {
+            Image(painterResource(R.drawable.nhh_banner), "No Heroes Here", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Surface(Modifier.align(Alignment.BottomStart).padding(12.dp), color = Color(0xDD2E6B3B), shape = RoundedCornerShape(18.dp)) {
+                Text("READY", Modifier.padding(horizontal = 14.dp, vertical = 8.dp), color = Color.White)
             }
         }
-
-        if (!error.isNullOrBlank()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF421B1B)),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFFF806F))
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text("Launch failed", color = Color(0xFFFF8A76), style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(4.dp))
-                        Text(error, color = Color(0xFFE6C9D0))
-                    }
-                }
-            }
+        Button(onClick = onRun, Modifier.fillMaxWidth().height(68.dp), shape = RoundedCornerShape(16.dp)) {
+            Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(10.dp)); Text("RUN GAME", style = MaterialTheme.typography.titleLarge)
         }
+        OutlinedButton(onClick = onSettings, Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(14.dp)) {
+            Icon(Icons.Default.Settings, null); Spacer(Modifier.width(8.dp)); Text("SETTINGS")
+        }
+        if (!error.isNullOrBlank()) Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3A1717))) { Text(error, Modifier.padding(14.dp), color = Color(0xFFFFB5A9)) }
     }
 }
 

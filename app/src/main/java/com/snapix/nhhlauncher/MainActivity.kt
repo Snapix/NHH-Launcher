@@ -274,7 +274,42 @@ private fun NhhApp(context: Context, activity: MainActivity) {
                             }
                         }
                     },
-                    onSettings = { openSettings() }
+                    onSettings = { openSettings() },
+                    onControls = {
+                        scope.launch {
+                            try {
+                                error = null
+                                WinlatorRuntime.openControlsEditor(activity)
+                            } catch (t: Throwable) {
+                                error = t.message ?: "Could not open the controls editor."
+                            }
+                        }
+                    },
+                    onDesktop = {
+                        scope.launch {
+                            try {
+                                error = null
+                                setupStage = SetupStage.BOOTSTRAP
+                                setupProgress = 0f
+                                setupDetail = "Checking Winlator runtime…"
+                                WinlatorRuntime.ensureReady(
+                                    activity,
+                                    File(gameExe!!),
+                                    prefs,
+                                    onProgress = { progress, detail ->
+                                        setupProgress = progress
+                                        setupDetail = detail
+                                    },
+                                    forceRebuild = false
+                                )
+                                setupStage = null
+                                WinlatorRuntime.enterDesktop(activity, prefs)
+                            } catch (t: Throwable) {
+                                setupStage = null
+                                error = t.message ?: "Could not open the container desktop."
+                            }
+                        }
+                    }
                 )
             }
         }
@@ -432,22 +467,80 @@ private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> U
 }
 
 @Composable
-private fun MainMenu(gameExeName: String, error: String?, onBack: () -> Unit, onRun: () -> Unit, onSettings: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun MainMenu(
+    gameExeName: String,
+    error: String?,
+    onBack: () -> Unit,
+    onRun: () -> Unit,
+    onSettings: () -> Unit,
+    onControls: () -> Unit,
+    onDesktop: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
         LauncherHeader("Ready to play", onBack = onBack, onSettings = onSettings)
+
         Box(Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(18.dp))) {
-            Image(painterResource(R.drawable.nhh_banner), "No Heroes Here", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Surface(Modifier.align(Alignment.BottomStart).padding(12.dp), color = Color(0xDD2E6B3B), shape = RoundedCornerShape(18.dp)) {
-                Text("READY", Modifier.padding(horizontal = 14.dp, vertical = 8.dp), color = Color.White)
+            Image(
+                painterResource(R.drawable.nhh_banner),
+                "No Heroes Here",
+                Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Surface(
+                Modifier.align(Alignment.BottomStart).padding(12.dp),
+                color = Color(0xDD2E6B3B),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text(
+                    "READY",
+                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    color = Color.White
+                )
             }
         }
-        Button(onClick = onRun, Modifier.fillMaxWidth().height(68.dp), shape = RoundedCornerShape(16.dp)) {
-            Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(10.dp)); Text("RUN GAME", style = MaterialTheme.typography.titleLarge)
+
+        Button(
+            onClick = onRun,
+            Modifier.fillMaxWidth().height(68.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Icon(Icons.Default.PlayArrow, null)
+            Spacer(Modifier.width(10.dp))
+            Text("RUN GAME", style = MaterialTheme.typography.titleLarge)
         }
-        OutlinedButton(onClick = onSettings, Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(14.dp)) {
-            Icon(Icons.Default.Settings, null); Spacer(Modifier.width(8.dp)); Text("SETTINGS")
+
+        OutlinedButton(
+            onClick = onControls,
+            Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Icon(Icons.Default.Gamepad, null)
+            Spacer(Modifier.width(8.dp))
+            Text("CONTROLS")
         }
-        if (!error.isNullOrBlank()) Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3A1717))) { Text(error, Modifier.padding(14.dp), color = Color(0xFFFFB5A9)) }
+
+        OutlinedButton(
+            onClick = onDesktop,
+            Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Icon(Icons.Default.Build, null)
+            Spacer(Modifier.width(8.dp))
+            Text("ENTER DESKTOP")
+        }
+
+        if (!error.isNullOrBlank()) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3A1717))) {
+                Text(
+                    error,
+                    Modifier.padding(14.dp),
+                    color = Color(0xFFFFB5A9)
+                )
+            }
+        }
     }
 }
 

@@ -58,7 +58,7 @@ internal fun LauncherSettingsScreen(
         if (selected == null) {
             SettingsHome(settings, onCategory = { category = it }, onBack, onSave, isSaving, feedback, error)
         } else {
-            SettingsCategoryPage(selected, settings, onChange, onBack = { category = null }, onSave, isSaving)
+            SettingsCategoryPage(selected, settings, onChange, onBack = { category = null }, onSave, isSaving, onReimport, onShareReport)
         }
     }
 }
@@ -162,7 +162,9 @@ private fun SettingsCategoryPage(
     onChange: (LauncherRuntimeSettings) -> Unit,
     onBack: () -> Unit,
     onSave: () -> Unit,
-    isSaving: Boolean
+    isSaving: Boolean,
+    onReimport: () -> Unit,
+    onShareReport: () -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -188,7 +190,7 @@ private fun SettingsCategoryPage(
                 SettingsCategory.COMPONENTS -> item { ComponentSettings(settings, onChange) }
                 SettingsCategory.ENVIRONMENT -> item { EnvironmentSettings(settings, onChange) }
                 SettingsCategory.INPUT -> item { InputSettings(settings, onChange) }
-                SettingsCategory.SYSTEM -> item { SystemSettings(settings, onChange) }
+                SettingsCategory.SYSTEM -> item { SystemSettings(settings, onChange, onReimport, onShareReport) }
             }
         }
     }
@@ -274,7 +276,7 @@ private fun SettingsCategoryPage(
     }
 }
 
-@Composable private fun SystemSettings(s: LauncherRuntimeSettings, c: (LauncherRuntimeSettings)->Unit) {
+@Composable private fun SystemSettings(s: LauncherRuntimeSettings, c: (LauncherRuntimeSettings)->Unit, onReimport: ()->Unit, onShareReport: ()->Unit) {
     SettingsGroup("Runtime behaviour") {
         SwitchSetting("Background protection", "Keep the runtime protected while Android backgrounds it", s.backgroundProtection) { c(s.copy(backgroundProtection=it)) }
         SwitchSetting("Background wakelock", "Keep the device awake while runtime is active", s.backgroundWakelock) { c(s.copy(backgroundWakelock=it)) }
@@ -283,6 +285,9 @@ private fun SettingsCategoryPage(
         Choice("Box64 logs", s.box64Logs.toString(), listOf("0" to "Disabled","1" to "Basic","2" to "Detailed")) { c(s.copy(box64Logs=it.toInt())) }
         SwitchSetting("Save logs to file", "Persist runtime logs", s.saveLogsToFile) { c(s.copy(saveLogsToFile=it)) }
         TextFieldSetting("Log file", s.logFile) { c(s.copy(logFile=it)) }
+        HorizontalDivider()
+        OutlinedButton(onClick=onShareReport, modifier=Modifier.fillMaxWidth()) { Text("SHARE LAST LAUNCH REPORT") }
+        OutlinedButton(onClick=onReimport, modifier=Modifier.fillMaxWidth()) { Text("RE-IMPORT GAME ZIP") }
     }
 }
 

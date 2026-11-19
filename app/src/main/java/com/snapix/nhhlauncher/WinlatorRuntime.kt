@@ -3,33 +3,58 @@ package com.snapix.nhhlauncher
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.util.Log
+import com.winlator.XServerDisplayActivity
+import com.winlator.box64.Box64Preset
+import com.winlator.container.AudioDrivers
+import com.winlator.container.Container
+import com.winlator.container.ContainerManager
+import com.winlator.container.DXWrappers
+import com.winlator.container.GraphicsDrivers
+import com.winlator.core.WineThemeManager
+import com.winlator.xenvironment.RootFS
+import com.winlator.xenvironment.RootFSInstaller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import com.winlator.XServerDisplayActivity
-import com.winlator.MainActivity as WinlatorMainActivity
-import com.winlator.R as WinlatorR
-import com.winlator.box64.Box64Preset
-import com.winlator.container.Container
-import com.winlator.container.ContainerManager
-import com.winlator.container.GraphicsDrivers
-import com.winlator.core.FileUtils
-import com.winlator.core.WineThemeManager
-import com.winlator.xenvironment.RootFS
-import com.winlator.xenvironment.RootFSInstaller
 import org.json.JSONObject
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+data class LauncherRuntimeSettings(
+    val resolution: String = "1280x720",
+    val vulkanDriver: String = GraphicsDrivers.DEFAULT_VULKAN_DRIVER,
+    val openGlDriver: String = GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
+    val dxWrapper: String = DXWrappers.DXVK,
+    val audioDriver: String = AudioDrivers.ALSA,
+    val box64Preset: String = Box64Preset.DEFAULT,
+    val wineEsync: Boolean = true,
+    val onScreenControls: Boolean = true
+)
+
 object WinlatorRuntime {
     private const val PREF_CONTAINER_ID = "winlator_container_id"
-    private const val PREF_SHORTCUT = "winlator_shortcut"
+    private const val PREF_GAME_PATH = "winlator_game_path"
+    private const val PREF_CONTROLS_PROFILE = "nhh_controls_profile_id"
+    private const val PREFS = "nhh"
+
     private const val CONTAINER_NAME = "NHH"
     private const val GAME_DRIVE = "G"
+    private val rootfsVersion = RootFSInstaller.LATEST_VERSION.toInt()
 
-    private val ROOTFS_VERSION = RootFSInstaller.LATEST_VERSION.toInt()
+    private val resolutions = setOf("960x540", "1280x720", "1600x900", "1920x1080")
+    private val vulkanDrivers = setOf(GraphicsDrivers.VORTEK, GraphicsDrivers.TURNIP)
+    private val openGlDrivers = setOf(GraphicsDrivers.GLADIO, GraphicsDrivers.ZINK, GraphicsDrivers.VIRGL)
+    private val dxWrappers = setOf(DXWrappers.DXVK, DXWrappers.WINED3D)
+    private val audioDrivers = setOf(AudioDrivers.ALSA, AudioDrivers.PULSEAUDIO)
+    private val box64Presets = setOf(
+        Box64Preset.STABILITY,
+        Box64Preset.CONSERVATIVE,
+        Box64Preset.INTERMEDIATE,
+        Box64Preset.PERFORMANCE
+    )
 
     suspend fun prepare(
         activity: MainActivity,
@@ -47,62 +72,66 @@ object WinlatorRuntime {
         onProgress: (Float, String) -> Unit,
         forceRebuild: Boolean = false
     ) = withContext(Dispatchers.IO) {
-        require(gameExe.isFile) { "The selected NHH executable no longer exists." }
+        val canonicalExe = gameExe.canonicalFile
+        val gameRoot = File(activity.filesDir, "game").canonicalFile
+        require(canonicalExe.isFile) { "The selected NHH executable no longer exists." }
+        require(canonicalExe.path.startsWith(gameRoot.path + File.separator)) {
+            "The NHH executable is outside the imported game folder. Re-import the game ZIP."
+        }
 
         val rootFS = RootFS.find(activity)
-        if (!rootFS.isValid() || rootFS.getVersion() < ROOTFS_VERSION) {
+        if (!rootFS.isValid() || rootFS.getVersion() < rootfsVersion) {
             withContext(Dispatchers.Main.immediate) {
                 onProgress(0.05f, "Installing Winlator system files…")
+                RootFSInstaller.installIfNeeded(activity)
             }
-            withContext(Dispatchers.Main.immediate) { RootFSInstaller.installIfNeeded(activity) }
+
             var waited = 0L
-            while (!rootFS.isValid() || rootFS.getVersion() < ROOTFS_VERSION) {
-                delay(250)
-                waited += 250
+            while (!rootFS.isValid() || rootFS.getVersion() < rootfsVersion) {
+                delay(300)
+                waited += 300
                 if (waited > 15 * 60 * 1000L) {
-                    throw IllegalStateException("Winlator Bootstrap did not finish.")
+                    throw IllegalStateException("Winlator Bootstrap did not finish. Check the system-files installation.")
                 }
-                if (waited % 1000L == 0L) {
+                if (waited % 1200L < 300L) {
                     withContext(Dispatchers.Main.immediate) {
-                        onProgress(0.05f, "Installing Winlator system files… " + (waited / 1000L) + "s")
+                        onProgress(0.08f, "Installing Winlator system files… " + (waited / 1000L).toString() + "s")
                     }
                 }
             }
         }
 
-        val relativeExe = gameExe.relativeTo(File(activity.filesDir, "game")).path
-            .replace(File.separatorChar, '/')
-
         val manager = ContainerManager(activity)
         val oldId = prefs.getInt(PREF_CONTAINER_ID, 0)
-        val oldShortcut = prefs.getString(PREF_SHORTCUT, null)
-        val oldContainer = if (oldId > 0) manager.getContainers().firstOrNull { it.id == oldId } else null
+        val oldContainer = if (oldId > 0) manager.getContainerById(oldId) else null
 
-        if (!forceRebuild && oldContainer != null && oldShortcut != null && File(oldShortcut).isFile) {
+        if (!forceRebuild && oldContainer != null) {
+            mapGameDrive(oldContainer, gameRoot)
+            oldContainer.saveData()
+            prefs.edit().putString(PREF_GAME_PATH, canonicalExe.absolutePath).apply()
+            withContext(Dispatchers.Main.immediate) {
+                onProgress(1f, "Winlator container verified.")
+            }
             return@withContext
         }
 
         withContext(Dispatchers.Main.immediate) {
-            onProgress(0.45f, "Creating the NHH Winlator container…")
+            onProgress(0.42f, "Creating the NHH Winlator container…")
         }
 
         val container = createContainer(manager, activity)
 
         withContext(Dispatchers.Main.immediate) {
-            onProgress(0.70f, "Mounting the game into Wine as drive G:…")
+            onProgress(0.72f, "Mapping the imported game folder to drive G:…")
         }
 
-        // Do not copy the game a second time. Winlator's drive mapping can point
-        // directly at the launcher-private game directory.
-        val gameRoot = File(activity.filesDir, "game")
-        container.setDrives(Container.DEFAULT_DRIVES + GAME_DRIVE + ":" + gameRoot.absolutePath)
+        mapGameDrive(container, gameRoot)
         container.saveData()
-
-        val shortcut = createGameShortcut(container, relativeExe)
 
         prefs.edit()
             .putInt(PREF_CONTAINER_ID, container.id)
-            .putString(PREF_SHORTCUT, shortcut.absolutePath)
+            .putString(PREF_GAME_PATH, canonicalExe.absolutePath)
+            .putInt(PREF_CONTROLS_PROFILE, 3)
             .apply()
 
         if (oldContainer != null && oldContainer.id != container.id) {
@@ -110,21 +139,34 @@ object WinlatorRuntime {
         }
 
         withContext(Dispatchers.Main.immediate) {
-            onProgress(1f, "Winlator bootstrap finished. NHH is ready.")
+            onProgress(1f, "Winlator container created. NHH is ready to launch.")
         }
+    }
+
+    private fun mapGameDrive(container: Container, gameRoot: File) {
+        val canonicalRoot = gameRoot.canonicalFile
+        val existing = container.drivesIterator().firstOrNull { it.letter.equals(GAME_DRIVE, ignoreCase = true) }
+        if (existing != null && File(existing.path).canonicalFile == canonicalRoot) return
+
+        val driveEntries = container.drivesIterator()
+            .filterNot { it.letter.equals(GAME_DRIVE, ignoreCase = true) }
+            .map { it.letter + ":" + it.path }
+            .toMutableList()
+        driveEntries.add(GAME_DRIVE + ":" + canonicalRoot.absolutePath)
+        container.setDrives(driveEntries.joinToString(separator = ""))
     }
 
     private suspend fun createContainer(
         manager: ContainerManager,
-        activity: Context
-    ): com.winlator.container.Container = suspendCancellableCoroutine { continuation ->
+        context: Context
+    ): Container = suspendCancellableCoroutine { continuation ->
         val data = JSONObject().apply {
             put("name", CONTAINER_NAME)
             put("screenSize", Container.DEFAULT_SCREEN_SIZE)
             put("envVars", Container.DEFAULT_ENV_VARS)
             put("cpuList", "")
             put("cpuListWoW64", "")
-            put("graphicsDriver", GraphicsDrivers.getDefaultDriver(activity))
+            put("graphicsDriver", GraphicsDrivers.getDefaultDriver(context))
             put("dxwrapper", Container.DEFAULT_DXWRAPPER)
             put("dxwrapperConfig", "")
             put("graphicsDriverConfig", "")
@@ -139,63 +181,143 @@ object WinlatorRuntime {
         }
 
         manager.createContainerAsync(data) { container ->
-            if (container != null) continuation.resume(container)
-            else continuation.resumeWithException(IllegalStateException("Could not create the Winlator NHH container."))
+            if (container != null) {
+                if (continuation.isActive) continuation.resume(container)
+            } else if (continuation.isActive) {
+                continuation.resumeWithException(
+                    IllegalStateException("Winlator could not create the NHH container. The container-pattern files may be missing.")
+                )
+            }
         }
     }
 
-    private fun createGameShortcut(container: com.winlator.container.Container, relativeExe: String): File {
-        val desktopDir = File(container.getUserDir(), "Desktop")
-        if (!desktopDir.isDirectory()) desktopDir.mkdirs()
+    fun loadSettings(context: Context, prefs: SharedPreferences): LauncherRuntimeSettings {
+        val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
+        val container = if (containerId > 0) {
+            ContainerManager(context).getContainerById(containerId)
+        } else null
 
-        val shortcut = File(desktopDir, "NHH.desktop")
-        val dosPath = "G:\\" + relativeExe.replace("/", "\\")
-        val content = buildString {
-            append("[Desktop Entry]\n")
-            append("Name=No Hero's Here\n")
-            append("Exec=wine " + dosPath + "\n")
-            append("Type=Application\n")
-            append("StartupNotify=false\n")
-            append("\n[Extra Data]\n")
-            append("controlsProfile=3\n")
-        }
-        FileUtils.writeString(shortcut, content)
-        return shortcut
+        if (container == null) return LauncherRuntimeSettings()
+
+        val drivers = GraphicsDrivers.parseIdentifiers(container.graphicsDriver)
+        val env = container.envVars.split(Regex("\\s+"))
+            .firstOrNull { it.startsWith("WINEESYNC=") }
+            ?.substringAfter("=")
+
+        return LauncherRuntimeSettings(
+            resolution = container.screenSize,
+            vulkanDriver = drivers.getOrNull(0) ?: GraphicsDrivers.DEFAULT_VULKAN_DRIVER,
+            openGlDriver = drivers.getOrNull(1) ?: GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
+            dxWrapper = container.dxwrapper,
+            audioDriver = container.audioDriver,
+            box64Preset = container.box64Preset,
+            wineEsync = env != "0",
+            onScreenControls = prefs.getInt(PREF_CONTROLS_PROFILE, 3) == 3
+        )
+    }
+
+    fun saveSettings(
+        context: Context,
+        prefs: SharedPreferences,
+        settings: LauncherRuntimeSettings
+    ) {
+        require(settings.resolution in resolutions) { "Unsupported display resolution." }
+        require(settings.vulkanDriver in vulkanDrivers) { "Unsupported Vulkan driver." }
+        require(settings.openGlDriver in openGlDrivers) { "Unsupported OpenGL driver." }
+        require(settings.dxWrapper in dxWrappers) { "Unsupported DirectX wrapper." }
+        require(settings.audioDriver in audioDrivers) { "Unsupported audio driver." }
+        require(settings.box64Preset in box64Presets) { "Unsupported Box64 preset." }
+
+        val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
+        require(containerId > 0) { "Import the game before changing runtime settings." }
+        val manager = ContainerManager(context)
+        val container = manager.getContainerById(containerId)
+            ?: throw IllegalStateException("The NHH Winlator container is missing. Re-import the game ZIP.")
+
+        container.setScreenSize(settings.resolution)
+        container.setGraphicsDriver(settings.vulkanDriver + "," + settings.openGlDriver)
+        container.setDXWrapper(settings.dxWrapper)
+        container.setAudioDriver(settings.audioDriver)
+        container.setBox64Preset(settings.box64Preset)
+        container.setEnvVars(setEnvironmentVariable(container.envVars, "WINEESYNC", if (settings.wineEsync) "1" else "0"))
+        container.saveData()
+
+        prefs.edit()
+            .putInt(PREF_CONTROLS_PROFILE, if (settings.onScreenControls) 3 else 0)
+            .apply()
+
+        appendLaunchLog(context, "Runtime settings saved: " + settings.toString())
+    }
+
+    private fun setEnvironmentVariable(source: String, key: String, value: String): String {
+        val entries = source.split(Regex("\\s+"))
+            .filter { it.isNotBlank() && !it.startsWith(key + "=") }
+            .toMutableList()
+        entries.add(key + "=" + value)
+        return entries.joinToString(" ")
     }
 
     fun launchGame(context: Context, prefs: SharedPreferences) {
-        val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
-        val shortcutPath = prefs.getString(PREF_SHORTCUT, null)
-        require(containerId > 0 && !shortcutPath.isNullOrBlank() && File(shortcutPath).isFile) {
-            "NHH Winlator container is not ready. Re-import the game ZIP."
-        }
+        val launchStage = "preflight"
+        try {
+            val rootFS = RootFS.find(context)
+            require(rootFS.isValid() && rootFS.getVersion() >= rootfsVersion) {
+                "Winlator system files are not installed or are outdated. Re-import the game ZIP to run setup."
+            }
 
-        val intent = Intent(context, XServerDisplayActivity::class.java).apply {
-            putExtra("container_id", containerId)
-            putExtra("shortcut_path", shortcutPath)
+            val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
+            require(containerId > 0) { "The NHH Winlator container has not been created. Re-import the game ZIP." }
+
+            val manager = ContainerManager(context)
+            val container = manager.getContainerById(containerId)
+                ?: throw IllegalStateException("The NHH Winlator container no longer exists. Re-import the game ZIP.")
+
+            val gameExePath = prefs.getString("game_exe", null)
+                ?: throw IllegalStateException("The imported NHH executable path is missing. Re-import the game ZIP.")
+            val gameExe = File(gameExePath).canonicalFile
+            val gameRoot = File(context.filesDir, "game").canonicalFile
+            require(gameExe.isFile) { "NHH.exe is missing from the imported game folder. Re-import the game ZIP." }
+            require(gameExe.path.startsWith(gameRoot.path + File.separator)) {
+                "The selected executable is outside the game folder. Re-import the game ZIP."
+            }
+
+            val gameDrive = container.drivesIterator()
+                .firstOrNull { it.letter.equals(GAME_DRIVE, ignoreCase = true) }
+                ?: throw IllegalStateException("The NHH game drive G: is not configured. Re-import the game ZIP.")
+
+            require(File(gameDrive.path).canonicalFile == gameRoot) {
+                "The NHH G: drive points to the wrong folder. Re-import the game ZIP."
+            }
+
+            appendLaunchLog(context, "Preflight passed. Container=" + containerId + ", executable=" + gameExe.absolutePath)
+            Log.i("NHHLauncher", "Launching NHH through Winlator exec_path: " + gameExe.absolutePath)
+
+            val intent = Intent(context, XServerDisplayActivity::class.java).apply {
+                putExtra("container_id", containerId)
+                putExtra("exec_path", gameExe.absolutePath)
+                putExtra("nhh_controls_profile_id", prefs.getInt(PREF_CONTROLS_PROFILE, 3))
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK.takeIf { context !is android.app.Activity } ?: 0)
+            }
+            context.startActivity(intent)
+        } catch (t: Throwable) {
+            appendLaunchLog(context, "Launch failed: " + t.javaClass.simpleName + ": " + (t.message ?: "no message"))
+            Log.e("NHHLauncher", "NHH launch failed", t)
+            throw t
         }
-        context.startActivity(intent)
     }
 
-    fun openGlobalSettings(context: Context) {
-        val intent = Intent(context, WinlatorMainActivity::class.java).apply {
-            putExtra("selected_menu_item_id", WinlatorR.id.menu_item_settings)
-        }
-        context.startActivity(intent)
+    fun readLaunchLog(context: Context): String {
+        val file = File(context.filesDir, "nhh-launch.log")
+        return if (file.isFile) file.readText() else "No launch report has been recorded yet."
     }
 
-    fun openContainerSettings(context: Context) {
-        val intent = Intent(context, WinlatorMainActivity::class.java).apply {
-            putExtra("selected_menu_item_id", WinlatorR.id.menu_item_containers)
+    private fun appendLaunchLog(context: Context, message: String) {
+        try {
+            File(context.filesDir, "nhh-launch.log").appendText(
+                System.currentTimeMillis().toString() + " " + message + "\n"
+            )
+        } catch (ignored: Exception) {
+            Log.w("NHHLauncher", "Could not write launch report", ignored)
         }
-        context.startActivity(intent)
-    }
-
-    fun openInputControls(context: Context) {
-        val intent = Intent(context, WinlatorMainActivity::class.java).apply {
-            putExtra("edit_input_controls", true)
-            putExtra("selected_profile_id", 3)
-        }
-        context.startActivity(intent)
     }
 }

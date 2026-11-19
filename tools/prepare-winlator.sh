@@ -141,6 +141,9 @@ s = p.read_text()
 for perm in [
     '    <uses-permission android:name="android.permission.INTERNET" />',
     '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
+    '    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />',
+    '    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />',
+    '    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />',
     '    <uses-permission android:name="android.permission.WAKE_LOCK" />',

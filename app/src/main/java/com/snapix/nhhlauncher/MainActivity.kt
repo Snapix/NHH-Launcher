@@ -286,24 +286,25 @@ private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: Stri
 }
 
 
+
 @Composable
 private fun SetupScreen(error: String?, onSelectZip: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(R.drawable.nhh_banner),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.11f },
+            contentDescription = "No Heroes Here",
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.10f },
             contentScale = ContentScale.Crop
         )
         Box(Modifier.fillMaxSize().background(Color(0xF5160B0B)))
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 26.dp),
+            Modifier.fillMaxSize().padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painter = painterResource(R.drawable.nhh_logo),
-                    contentDescription = null,
+                    contentDescription = "NHH logo",
                     modifier = Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -313,29 +314,66 @@ private fun SetupScreen(error: String?, onSelectZip: () -> Unit) {
                     Text("Game Setup & Launcher", color = Color(0xFFCFAFA8))
                 }
             }
-
             Image(
                 painter = painterResource(R.drawable.nhh_banner),
-                contentDescription = "No H
+                contentDescription = "No Heroes Here",
+                modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(22.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xE5221111))
+            ) {
+                Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("SELECT GAME ZIP ARCHIVE", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Import your own No Heroes Here game ZIP.", color = Color(0xFFD5BCB7))
+                    Spacer(Modifier.height(16.dp))
+                    Image(
+                        painter = painterResource(R.drawable.nhh_poster),
+                        contentDescription = "No Heroes Here poster",
+                        modifier = Modifier.size(150.dp, 190.dp).clip(RoundedCornerShape(18.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = onSelectZip,
+                        modifier = Modifier.fillMaxWidth().height(64.dp),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Icon(Icons.Default.Description, contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Text("SELECT GAME ZIP", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Text("Required storage: about 1.2 GB", color = Color(0xFFB99D97))
+                }
+            }
+            if (!error.isNullOrBlank()) {
+                Text(error, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
 @Composable
 private fun MainMenu(error: String?, onRun: () -> Unit, onSettings: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(R.drawable.nhh_banner),
-            contentDescription = null,
+            contentDescription = "No Heroes Here",
             modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.10f },
             contentScale = ContentScale.Crop
         )
         Box(Modifier.fillMaxSize().background(Color(0xF0160B0B)))
-
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 24.dp),
+            Modifier.fillMaxSize().padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painter = painterResource(R.drawable.nhh_logo),
-                    contentDescription = null,
+                    contentDescription = "NHH logo",
                     modifier = Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -348,14 +386,12 @@ private fun MainMenu(error: String?, onRun: () -> Unit, onSettings: () -> Unit) 
                     Icon(Icons.Default.Settings, contentDescription = "Settings")
                 }
             }
-
             Image(
                 painter = painterResource(R.drawable.nhh_banner),
                 contentDescription = "No Heroes Here",
                 modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(22.dp)),
                 contentScale = ContentScale.Crop
             )
-
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
@@ -384,7 +420,6 @@ private fun MainMenu(error: String?, onRun: () -> Unit, onSettings: () -> Unit) 
                     }
                 }
             }
-
             if (!error.isNullOrBlank()) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF321717)),

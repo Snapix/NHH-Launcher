@@ -30,27 +30,11 @@ class TsMuxer(
         writeVideoPes(payload, ptsUs, isKey)
     }
 
-    fun writeAudioFrame(aacData: ByteArray, ptsUs: Long) {
-        writeAudioPes(wrapAdts(aacData), ptsUs)
-    }
+
 
     fun drainTo(): ByteArray { val b = buf.toByteArray(); buf.reset(); return b }
 
-    private fun wrapAdts(aac: ByteArray): ByteArray {
-        val frameLength = 7 + aac.size
-        val profileBits = 1                                 // AAC-LC = 2 → profile field = profile-1 = 1
-        val channelConfig = audioChannelCount
-        val out = ByteArray(frameLength)
-        out[0] = 0xFF.toByte()
-        out[1] = 0xF1.toByte()                              // MPEG-4, no CRC
-        out[2] = (((profileBits and 0x3) shl 6) or ((samplingIndex and 0xF) shl 2) or ((channelConfig shr 2) and 0x1)).toByte()
-        out[3] = (((channelConfig and 0x3) shl 6) or ((frameLength shr 11) and 0x3)).toByte()
-        out[4] = ((frameLength shr 3) and 0xFF).toByte()
-        out[5] = (((frameLength and 0x7) shl 5) or 0x1F).toByte()
-        out[6] = 0xFC.toByte()                              // buffer_fullness=all1, 0 blocks
-        System.arraycopy(aac, 0, out, 7, aac.size)
-        return out
-    }
+
 
     private fun nalsWithParameters(nals: List<ByteArray>): List<ByteArray> {
         val out = ArrayList<ByteArray>(nals.size + 3)

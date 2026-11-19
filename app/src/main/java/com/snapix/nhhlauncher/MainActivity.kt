@@ -44,6 +44,7 @@ class MainActivity : com.winlator.MainActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         intent.putExtra("nhh_launcher", true)
         super.onCreate(savedInstanceState)
+        WinlatorRuntime.installCrashRecorder(this)
         setContent { NhhApp(applicationContext, this) }
     }
 }
@@ -193,7 +194,8 @@ private fun NhhApp(context: Context, activity: MainActivity) {
                         }
                     },
                     onBack = { settings = false },
-                    onReimport = { selectZip() }
+                    onReimport = { selectZip() },
+                    onShareReport = { WinlatorRuntime.shareLaunchReport(activity) }
                 )
                 gameExe == null || !File(gameExe!!).isFile -> SetupScreen(
                     error = error,

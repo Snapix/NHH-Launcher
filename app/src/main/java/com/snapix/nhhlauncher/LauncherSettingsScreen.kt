@@ -200,8 +200,8 @@ private fun SettingsCategoryPage(
     SettingsGroup("Screen") {
         Choice("Resolution", s.resolution, listOf("960x540" to "960 × 540","1280x720" to "1280 × 720","1600x900" to "1600 × 900","1920x1080" to "1920 × 1080","custom" to "Custom")) { c(s.copy(resolution=it)) }
         if (s.resolution == "custom") Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            NumberField("Width", s.customWidth.toString()) { c(s.copy(customWidth=it.toIntOrNull() ?: s.customWidth)) }
-            NumberField("Height", s.customHeight.toString()) { c(s.copy(customHeight=it.toIntOrNull() ?: s.customHeight)) }
+            NumberField("Width", s.customWidth.toString(), modifier = Modifier.weight(1f)) { c(s.copy(customWidth=it.toIntOrNull() ?: s.customWidth)) }
+            NumberField("Height", s.customHeight.toString(), modifier = Modifier.weight(1f)) { c(s.copy(customHeight=it.toIntOrNull() ?: s.customHeight)) }
         }
         Choice("HUD / FPS overlay", s.hudMode.toString(), listOf("0" to "Disabled","1" to "Simple FPS","2" to "Detailed HUD")) { c(s.copy(hudMode=it.toInt())) }
         Choice("Windows startup", s.startupSelection.toString(), listOf("0" to "Normal","1" to "Essential services","2" to "Aggressive")) { c(s.copy(startupSelection=it.toInt())) }
@@ -329,6 +329,6 @@ private fun SettingsCategoryPage(
     OutlinedTextField(value=value, onValueChange=onChange, label={Text(label)}, supportingText={if(supporting.isNotBlank()) Text(supporting)}, modifier=Modifier.fillMaxWidth(), minLines=1, maxLines=5, shape=RoundedCornerShape(17.dp))
 }
 
-@Composable private fun NumberField(label:String, value:String, onChange:(String)->Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
+@Composable private fun NumberField(label:String, value:String, modifier: Modifier = Modifier.fillMaxWidth(), onChange:(String)->Unit) {
     OutlinedTextField(value=value, onValueChange=onChange, label={Text(label)}, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), modifier=modifier, shape=RoundedCornerShape(17.dp), singleLine=true)
 }

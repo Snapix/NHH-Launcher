@@ -49,7 +49,8 @@ internal fun LauncherSettingsScreen(
     onChange: (LauncherRuntimeSettings) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
-    onReimport: () -> Unit
+    onReimport: () -> Unit,
+    onShareReport: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -186,6 +187,14 @@ internal fun LauncherSettingsScreen(
             )
         ) {
             Text(if (isSaving) "SAVING…" else "SAVE SETTINGS")
+        }
+
+        OutlinedButton(
+            onClick = onShareReport,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Text("SHARE LAST LAUNCH REPORT")
         }
 
         OutlinedButton(

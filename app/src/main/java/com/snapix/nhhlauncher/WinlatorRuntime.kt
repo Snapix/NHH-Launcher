@@ -55,6 +55,32 @@ object WinlatorRuntime {
         Box64Preset.INTERMEDIATE,
         Box64Preset.PERFORMANCE
     )
+    @Volatile private var crashRecorderInstalled = false
+
+    @Synchronized
+    fun installCrashRecorder(context: Context) {
+        if (crashRecorderInstalled) return
+        crashRecorderInstalled = true
+        val appContext = context.applicationContext
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            appendLaunchLog(
+                appContext,
+                "UNCAUGHT JAVA EXCEPTION on " + thread.name + ":\\n" + Log.getStackTraceString(throwable)
+            )
+            previous?.uncaughtException(thread, throwable)
+        }
+    }
+
+    fun shareLaunchReport(context: Context) {
+        val report = readLaunchLog(context)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "NHH Launcher diagnostic report")
+            putExtra(Intent.EXTRA_TEXT, report)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Share launch report"))
+    }
 
     suspend fun prepare(
         activity: MainActivity,

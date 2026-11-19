@@ -12,6 +12,10 @@ import com.winlator.container.ContainerManager
 import com.winlator.container.DXWrappers
 import com.winlator.container.GraphicsDrivers
 import com.winlator.core.WineThemeManager
+import com.winlator.win32.WinVersions
+import com.winlator.core.WineUtils
+import com.winlator.core.WineRegistryEditor
+import com.winlator.core.KeyValueSet
 import com.winlator.xenvironment.RootFS
 import com.winlator.xenvironment.RootFSInstaller
 import kotlinx.coroutines.Dispatchers
@@ -24,15 +28,27 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 data class LauncherRuntimeSettings(
-    val resolution: String = "1280x720",
-    val vulkanDriver: String = GraphicsDrivers.DEFAULT_VULKAN_DRIVER,
-    val openGlDriver: String = GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
-    val dxWrapper: String = DXWrappers.DXVK,
-    val audioDriver: String = AudioDrivers.ALSA,
-    val box64Preset: String = Box64Preset.DEFAULT,
-    val wineEsync: Boolean = true,
-    val onScreenControls: Boolean = true
-)
+    val resolution: String = "1280x720", val customWidth: Int = 1280, val customHeight: Int = 720,
+    val vulkanDriver: String = GraphicsDrivers.DEFAULT_VULKAN_DRIVER, val openGlDriver: String = GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
+    val graphicsDriverConfig: String = "", val dxWrapper: String = DXWrappers.DXVK, val dxWrapperConfig: String = "",
+    val audioDriver: String = AudioDrivers.ALSA, val audioDriverConfig: String = "", val box64Preset: String = Box64Preset.DEFAULT,
+    val cpuList: String = "", val cpuListWoW64: String = "", val wineVersion: String = "main", val windowsVersion: String = "win10",
+    val wineEsync: Boolean = true, val startupSelection: Int = 1, val hudMode: Int = 0,
+    val desktopTheme: String = "LIGHT", val desktopBackgroundType: String = "IMAGE", val desktopBackgroundColor: String = "#0277bd",
+    val systemFont: String = "Tahoma", val dpi: Int = 96, val mouseWarpOverride: String = "disable",
+    val winComponents: Map<String, Boolean> = defaultWinComponents(), val envVars: String = Container.DEFAULT_ENV_VARS, val drives: String = Container.DEFAULT_DRIVES,
+    val onScreenControls: Boolean = true, val controlsProfileId: Int = 3, val dinputMapperType: Int = 1, val forceFullscreen: Boolean = true,
+    val openAndroidBrowser: Boolean = true, val androidClipboard: Boolean = false, val backgroundProtection: Boolean = false,
+    val backgroundWakelock: Boolean = false, val saveMemOnSteam: Boolean = true, val wineDebug: Boolean = false,
+    val box64Logs: Int = 0, val saveLogsToFile: Boolean = false, val logFile: String = ""
+) {
+    companion object {
+        fun defaultWinComponents(): Map<String, Boolean> = linkedMapOf(
+            "direct3d" to true, "directsound" to true, "directmusic" to true, "directshow" to false,
+            "directplay" to false, "xaudio" to true, "vcrun2005" to false, "vcrun2010" to true, "wmdecoder" to true
+        )
+    }
+}
 
 object WinlatorRuntime {
     private const val PREF_CONTAINER_ID = "winlator_container_id"
@@ -218,61 +234,69 @@ object WinlatorRuntime {
     }
 
     fun loadSettings(context: Context, prefs: SharedPreferences): LauncherRuntimeSettings {
-        val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
-        val container = if (containerId > 0) {
-            ContainerManager(context).getContainerById(containerId)
-        } else null
-
-        if (container == null) return LauncherRuntimeSettings()
-
-        val drivers = GraphicsDrivers.parseIdentifiers(container.graphicsDriver)
-        val env = container.envVars.split(Regex("\\s+"))
-            .firstOrNull { it.startsWith("WINEESYNC=") }
-            ?.substringAfter("=")
-
+        val id = prefs.getInt(PREF_CONTAINER_ID, 0)
+        val c = if (id > 0) ContainerManager(context).getContainerById(id) else null
+        if (c == null) return LauncherRuntimeSettings()
+        val d = GraphicsDrivers.parseIdentifiers(c.graphicsDriver)
+        val env = KeyValueSet(c.envVars)
+        val comps = LauncherRuntimeSettings.defaultWinComponents().mapValues { (k, v) -> KeyValueSet(c.winComponents).getBoolean(k, v) }
+        val theme = c.desktopTheme.split(",")
+        var font = "Tahoma"; var dpi = 96; var warp = "disable"
+        val regFile = File(c.rootDir, ".wine/user.reg")
+        if (regFile.isFile()) try {
+            WineRegistryEditor(regFile).use { reg ->
+                font = com.winlator.win32.MSLogFont().fromByteArray(reg.getHexValues("Control Panel\\Desktop\\WindowMetrics", "CaptionFont")).getFaceName()
+                dpi = reg.getDwordValue("Control Panel\\Desktop", "LogPixels", 96)
+                warp = reg.getStringValue("Software\\Wine\\DirectInput", "MouseWarpOverride", "disable")
+            }
+        } catch (_: Throwable) {}
+        val gp = prefs
         return LauncherRuntimeSettings(
-            resolution = container.screenSize,
-            vulkanDriver = drivers.getOrNull(0) ?: GraphicsDrivers.DEFAULT_VULKAN_DRIVER,
-            openGlDriver = drivers.getOrNull(1) ?: GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
-            dxWrapper = container.getDXWrapper(),
-            audioDriver = container.audioDriver,
-            box64Preset = container.box64Preset,
-            wineEsync = env != "0",
-            onScreenControls = prefs.getInt(PREF_CONTROLS_PROFILE, 3) == 3
+            resolution=c.screenSize, customWidth=c.screenSize.substringBefore("x").toIntOrNull() ?: 1280, customHeight=c.screenSize.substringAfter("x").toIntOrNull() ?: 720,
+            vulkanDriver=d.getOrNull(0) ?: GraphicsDrivers.DEFAULT_VULKAN_DRIVER, openGlDriver=d.getOrNull(1) ?: GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
+            graphicsDriverConfig=c.graphicsDriverConfig, dxWrapper=c.getDXWrapper(), dxWrapperConfig=c.dxWrapperConfig,
+            audioDriver=c.audioDriver, audioDriverConfig=c.audioDriverConfig, box64Preset=c.box64Preset,
+            cpuList=c.getCPUList(true), cpuListWoW64=c.getCPUListWoW64(true), wineVersion=c.wineVersion,
+            windowsVersion=gp.getString("nhh_windows_version", "win10") ?: "win10", wineEsync=env.getBoolean("WINEESYNC", true),
+            startupSelection=c.startupSelection.toInt(), hudMode=c.hUDMode.toInt(), desktopTheme=theme.getOrNull(0) ?: "LIGHT",
+            desktopBackgroundType=theme.getOrNull(1) ?: "IMAGE", desktopBackgroundColor=theme.getOrNull(2) ?: "#0277bd",
+            systemFont=font, dpi=dpi, mouseWarpOverride=warp, winComponents=comps, envVars=c.envVars, drives=c.drives,
+            onScreenControls=gp.getInt(PREF_CONTROLS_PROFILE, 3) > 0, controlsProfileId=gp.getInt(PREF_CONTROLS_PROFILE, 3),
+            dinputMapperType=gp.getInt("nhh_dinput_mapper", 1), forceFullscreen=gp.getBoolean("nhh_force_fullscreen", true),
+            openAndroidBrowser=gp.getBoolean("open_android_browser_from_wine", true), androidClipboard=gp.getBoolean("use_android_clipboard_on_wine", false),
+            backgroundProtection=gp.getBoolean("enable_background_protection", false), backgroundWakelock=gp.getBoolean("enable_background_wakelock", false),
+            saveMemOnSteam=gp.getBoolean("save_mem_on_run_from_steam", true), wineDebug=gp.getBoolean("enable_wine_debug", false),
+            box64Logs=gp.getInt("box64_logs", 0), saveLogsToFile=gp.getBoolean("save_logs_to_file", false), logFile=gp.getString("log_file", "") ?: ""
         )
     }
 
-    fun saveSettings(
-        context: Context,
-        prefs: SharedPreferences,
-        settings: LauncherRuntimeSettings
-    ) {
-        require(settings.resolution in resolutions) { "Unsupported display resolution." }
-        require(settings.vulkanDriver in vulkanDrivers) { "Unsupported Vulkan driver." }
-        require(settings.openGlDriver in openGlDrivers) { "Unsupported OpenGL driver." }
-        require(settings.dxWrapper in dxWrappers) { "Unsupported DirectX wrapper." }
-        require(settings.audioDriver in audioDrivers) { "Unsupported audio driver." }
-        require(settings.box64Preset in box64Presets) { "Unsupported Box64 preset." }
-
-        val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
-        require(containerId > 0) { "Import the game before changing runtime settings." }
-        val manager = ContainerManager(context)
-        val container = manager.getContainerById(containerId)
-            ?: throw IllegalStateException("The NHH Winlator container is missing. Re-import the game ZIP.")
-
-        container.setScreenSize(settings.resolution)
-        container.setGraphicsDriver(settings.vulkanDriver + "," + settings.openGlDriver)
-        container.setDXWrapper(settings.dxWrapper)
-        container.setAudioDriver(settings.audioDriver)
-        container.setBox64Preset(settings.box64Preset)
-        container.setEnvVars(setEnvironmentVariable(container.envVars, "WINEESYNC", if (settings.wineEsync) "1" else "0"))
-        container.saveData()
-
-        prefs.edit()
-            .putInt(PREF_CONTROLS_PROFILE, if (settings.onScreenControls) 3 else 0)
-            .apply()
-
-        appendLaunchLog(context, "Runtime settings saved: " + settings.toString())
+    fun saveSettings(context: Context, prefs: SharedPreferences, s: LauncherRuntimeSettings) {
+        val id = prefs.getInt(PREF_CONTAINER_ID, 0)
+        require(id > 0) { "Import the game before changing runtime settings." }
+        val c = ContainerManager(context).getContainerById(id) ?: error("The NHH Winlator container is missing.")
+        require(s.customWidth in 320..7680 && s.customHeight in 240..4320)
+        require(s.vulkanDriver in vulkanDrivers && s.openGlDriver in openGlDrivers && s.dxWrapper in dxWrappers && s.audioDriver in audioDrivers && s.box64Preset in box64Presets)
+        val screen = if (s.resolution == "custom") "${s.customWidth and -2}x${s.customHeight and -2}" else s.resolution
+        val kv = KeyValueSet(); for ((k,v) in s.winComponents) kv.put(k, if (v) 1 else 0)
+        c.setScreenSize(screen); c.setGraphicsDriver(s.vulkanDriver+","+s.openGlDriver); c.setGraphicsDriverConfig(s.graphicsDriverConfig)
+        c.setDXWrapper(s.dxWrapper); c.setDXWrapperConfig(s.dxWrapperConfig); c.setAudioDriver(s.audioDriver); c.setAudioDriverConfig(s.audioDriverConfig)
+        c.setBox64Preset(s.box64Preset); c.setCPUList(s.cpuList); c.setCPUListWoW64(s.cpuListWoW64); c.setStartupSelection(s.startupSelection.toByte()); c.setHUDMode(s.hudMode.toByte())
+        c.setEnvVars(s.envVars.ifBlank { Container.DEFAULT_ENV_VARS }); c.setWinComponents(kv.toString()); c.setDrives(s.drives)
+        c.setDesktopTheme("${s.desktopTheme},${s.desktopBackgroundType},${s.desktopBackgroundColor}"); c.saveData()
+        val regFile = File(c.rootDir, ".wine/user.reg")
+        if (regFile.isFile()) WineRegistryEditor(regFile).use { reg ->
+            WineUtils.setSystemFont(reg, s.systemFont.ifBlank { "Tahoma" }); reg.setDwordValue("Control Panel\\Desktop", "LogPixels", s.dpi.coerceIn(72,240))
+            reg.setStringValue("Software\\Wine\\DirectInput", "MouseWarpOverride", s.mouseWarpOverride)
+        }
+        val versions = WinVersions.getWinVersions(); val wi = versions.indexOfFirst { it.version == s.windowsVersion }; if (wi >= 0) WineUtils.setWinVersion(c, wi)
+        prefs.edit().putInt(PREF_CONTROLS_PROFILE, if (s.onScreenControls) s.controlsProfileId else 0)
+            .putInt("nhh_dinput_mapper", s.dinputMapperType).putBoolean("nhh_force_fullscreen", s.forceFullscreen)
+            .putBoolean("open_android_browser_from_wine", s.openAndroidBrowser).putBoolean("use_android_clipboard_on_wine", s.androidClipboard)
+            .putBoolean("enable_background_protection", s.backgroundProtection).putBoolean("enable_background_wakelock", s.backgroundWakelock)
+            .putBoolean("save_mem_on_run_from_steam", s.saveMemOnSteam).putBoolean("enable_wine_debug", s.wineDebug)
+            .putInt("box64_logs", s.box64Logs).putBoolean("save_logs_to_file", s.saveLogsToFile).putString("log_file", s.logFile)
+            .putString("nhh_windows_version", s.windowsVersion).apply()
+        appendLaunchLog(context, "All Winlator container settings saved.")
     }
 
     private fun setEnvironmentVariable(source: String, key: String, value: String): String {

@@ -71,6 +71,7 @@ mkdir -p "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher"
 cp "$NHH_SOURCE/MainActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/MainActivity.kt"
 cp "$NHH_SOURCE/WinlatorRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/WinlatorRuntime.kt"
 cp "$NHH_SOURCE/LauncherSettingsScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/LauncherSettingsScreen.kt"
+cp -r "$NHH_SOURCE/cast" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/"
 
 # NHH's launcher subclasses Winlator MainActivity only to reuse its real
 # bootstrap APIs. The guard prevents the upstream launcher UI from running first.
@@ -131,7 +132,40 @@ s = s[:m.start()] + "\n" + replacement + s[m.end():]
 p.write_text(s)
 PY
 
-# Patch Winlator bootstrap so NHH owns the progress UI instead of showing the
+# Add NHH Cast screen capture permissions and services to the merged Winlator manifest.
+python3 - "$MANIFEST" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+for perm in [
+    '    <uses-permission android:name="android.permission.INTERNET" />',
+    '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
+    '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+    '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />',
+    '    <uses-permission android:name="android.permission.WAKE_LOCK" />',
+]:
+    if perm not in s:
+        s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                      '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' + perm, 1)
+marker = '        <activity android:name="com.snapix.nhhlauncher.MainActivity"'
+idx = s.find(marker)
+if idx < 0:
+    raise SystemExit("NHH MainActivity manifest entry not found")
+if 'com.snapix.nhhlauncher.cast.CastActivity' not in s:
+    block = '''        <activity android:name="com.snapix.nhhlauncher.cast.CastActivity" android:exported="false" android:screenOrientation="portrait" />
+
+        <activity android:name="com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" android:exported="false" />
+
+        <service android:name="com.snapix.nhhlauncher.cast.CastForegroundService" android:foregroundServiceType="mediaProjection" android:exported="false" />
+
+'''
+    s = s[:idx] + block + s[idx:]
+p.write_text(s)
+PY
+
+# Patch the small NHH in-game menu with a real Cast action.
+ so NHH owns the progress UI instead of showing the
 # upstream centered installation dialog.
 ROOTFS_INSTALLER="$WINLATOR_APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
 python3 - "$ROOTFS_INSTALLER" <<'PY'
@@ -341,6 +375,8 @@ if "private void setupNhhOverlay" not in s:
         controls.setText("TOUCH CONTROLS");
         android.widget.Button fullscreen = new android.widget.Button(this);
         fullscreen.setText("FULLSCREEN");
+        android.widget.Button cast = new android.widget.Button(this);
+        cast.setText("CAST");
         android.widget.Button exit = new android.widget.Button(this);
         exit.setText("EXIT GAME");
 
@@ -350,6 +386,7 @@ if "private void setupNhhOverlay" not in s:
         panel.addView(resume, new android.widget.LinearLayout.LayoutParams(buttonLp));
         panel.addView(controls, new android.widget.LinearLayout.LayoutParams(buttonLp));
         panel.addView(fullscreen, new android.widget.LinearLayout.LayoutParams(buttonLp));
+        panel.addView(cast, new android.widget.LinearLayout.LayoutParams(buttonLp));
         panel.addView(exit, new android.widget.LinearLayout.LayoutParams(buttonLp));
 
         menu.addView(panel, new android.widget.FrameLayout.LayoutParams(
@@ -390,6 +427,10 @@ if "private void setupNhhOverlay" not in s:
         });
         fullscreen.setOnClickListener(v -> {
             xServerView.getRenderer().toggleFullscreen();
+            menu.setVisibility(View.GONE);
+        });
+        cast.setOnClickListener(v -> {
+            startActivity(new android.content.Intent(this, com.snapix.nhhlauncher.cast.CastActivity.class));
             menu.setVisibility(View.GONE);
         });
         exit.setOnClickListener(v -> finish());

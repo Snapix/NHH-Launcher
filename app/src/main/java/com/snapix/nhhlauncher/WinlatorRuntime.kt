@@ -258,7 +258,7 @@ object WinlatorRuntime {
             audioDriver=c.audioDriver, audioDriverConfig=c.audioDriverConfig, box64Preset=c.box64Preset,
             cpuList=c.getCPUList(true), cpuListWoW64=c.getCPUListWoW64(true), wineVersion=c.wineVersion,
             windowsVersion=gp.getString("nhh_windows_version", "win10") ?: "win10", wineEsync=env.getBoolean("WINEESYNC", true),
-            startupSelection=c.startupSelection.toInt(), hudMode=c.hUDMode.toInt(), desktopTheme=theme.getOrNull(0) ?: "LIGHT",
+            startupSelection=c.startupSelection.toInt(), hudMode=c.HUDMode.toInt(), desktopTheme=theme.getOrNull(0) ?: "LIGHT",
             desktopBackgroundType=theme.getOrNull(1) ?: "IMAGE", desktopBackgroundColor=theme.getOrNull(2) ?: "#0277bd",
             systemFont=font, dpi=dpi, mouseWarpOverride=warp, winComponents=comps, envVars=c.envVars, drives=c.drives,
             onScreenControls=gp.getInt(PREF_CONTROLS_PROFILE, 3) > 0, controlsProfileId=gp.getInt(PREF_CONTROLS_PROFILE, 3),

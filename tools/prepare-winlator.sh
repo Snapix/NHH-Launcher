@@ -436,20 +436,35 @@ if "private void setupNhhOverlay" not in s:
         exit.setOnClickListener(v -> finish());
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 7101 && resultCode == RESULT_OK && data != null) {
-            android.content.Intent projection = new android.content.Intent(
-                this, com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity.class
-            );
-            projection.putExtras(data);
-            startActivity(projection);
-        }
-    }
 '''
     s = s[:insert_at] + method + s[insert_at:]
 
+p.write_text(s)
+PY
+
+# Patch Winlator's existing activity-result handler instead of declaring a second one.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+needle = """        if (requestCode == MainActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
+            if (editInputControlsCallback != null) {
+                editInputControlsCallback.run();
+                editInputControlsCallback = null;
+            }
+        }"""
+if needle not in s:
+    raise SystemExit("Winlator onActivityResult handler not found")
+replacement = """        if (requestCode == 7101 && resultCode == Activity.RESULT_OK && data != null) {
+            Intent projection = new Intent(this, com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity.class);
+            projection.putExtras(data);
+            startActivity(projection);
+            return;
+        }
+
+${needle}"""
+s = s.replace(needle, replacement, 1)
 p.write_text(s)
 PY
 

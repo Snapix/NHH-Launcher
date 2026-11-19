@@ -70,6 +70,7 @@ PY
 mkdir -p "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher"
 cp "$NHH_SOURCE/MainActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/MainActivity.kt"
 cp "$NHH_SOURCE/WinlatorRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/WinlatorRuntime.kt"
+cp "$NHH_SOURCE/LauncherSettingsScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/LauncherSettingsScreen.kt"
 
 # NHH's launcher subclasses Winlator MainActivity only to reuse its real
 # bootstrap APIs. The guard prevents the upstream launcher UI from running first.

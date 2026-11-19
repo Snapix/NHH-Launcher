@@ -251,6 +251,36 @@ object WinlatorRuntime {
         }
     }
 
+    fun openControlsEditor(activity: MainActivity) {
+        val manager = InputControlsManager(activity)
+        val profile = manager.getProfile(3)
+            ?: throw IllegalStateException("The Virtual Gamepad profile is missing from the Winlator runtime.")
+        profile.loadControllers()
+        val intent = Intent(activity, com.winlator.ControlsEditorActivity::class.java).apply {
+            putExtra("profile_id", profile.id)
+        }
+        activity.startActivity(intent)
+    }
+
+    fun enterDesktop(activity: MainActivity, prefs: SharedPreferences) {
+        val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
+        require(containerId > 0) {
+            "The NHH container has not been created yet."
+        }
+
+        val manager = ContainerManager(activity)
+        require(manager.getContainerById(containerId) != null) {
+            "The NHH container is missing. Re-import the game ZIP."
+        }
+
+        appendLaunchLog(activity, "Opening NHH container desktop. Container=$containerId")
+        val intent = Intent(activity, XServerDisplayActivity::class.java).apply {
+            putExtra("container_id", containerId)
+            putExtra("nhh_desktop_mode", true)
+        }
+        activity.startActivity(intent)
+    }
+
     fun loadSettings(context: Context, prefs: SharedPreferences): LauncherRuntimeSettings {
         val containerId = prefs.getInt(PREF_CONTAINER_ID, 0)
         val container = if (containerId > 0) {

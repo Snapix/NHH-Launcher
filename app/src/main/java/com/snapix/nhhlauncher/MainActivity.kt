@@ -6,7 +6,9 @@ import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -16,6 +18,10 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -228,136 +234,169 @@ private fun NhhApp(context: Context, activity: MainActivity) {
     }
 }
 
+
 @Composable
 private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: String) {
-    Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            CircularProgressIndicator(modifier = Modifier.size(72.dp), strokeWidth = 6.dp)
-            Spacer(Modifier.height(28.dp))
-            Text(stage.label, style = MaterialTheme.typography.titleLarge)
-            if (stage == SetupStage.EXTRACTING) {
-                Spacer(Modifier.height(18.dp))
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(8.dp)
-                )
-                Spacer(Modifier.height(8.dp))
-                Text((progress * 100).toInt().toString() + "% extracted", style = MaterialTheme.typography.labelLarge)
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(R.drawable.nhh_banner),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.16f },
+            contentScale = ContentScale.Crop
+        )
+        Box(Modifier.fillMaxSize().background(Color(0xEE160B0B)))
+        Column(
+            Modifier.fillMaxSize().padding(22.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("NO HEROES HERE", style = MaterialTheme.typography.labelLarge, color = Color(0xFFFF8A76))
+            Spacer(Modifier.height(8.dp))
+            Text(stage.label, style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(18.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xE5221111))
+            ) {
+                Column(Modifier.padding(22.dp)) {
+                    if (stage == SetupStage.EXTRACTING) {
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(8.dp)
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text((progress * 100).toInt().toString() + "% extracted", style = MaterialTheme.typography.titleMedium)
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(8.dp))
+                        Spacer(Modifier.height(10.dp))
+                        Text("Preparing runtime…", style = MaterialTheme.typography.titleMedium)
+                    }
+                    if (detail.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(detail, color = Color(0xFFD9C4C0), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
-            if (detail.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(detail, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAAAAAA))
-            }
-            Spacer(Modifier.height(10.dp))
-            Text("Do not close NHH Launcher.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAAAAAA))
+            Spacer(Modifier.height(14.dp))
+            Text("NHH Launcher", color = Color(0xFF9E7B75))
         }
     }
 }
+
 
 @Composable
 private fun SetupScreen(error: String?, onSelectZip: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 34.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.Start
-    ) {
-        Text("NHH", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
-        Spacer(Modifier.height(10.dp))
-        Text("No Heroes Here", style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "Import your game files to create the Winlator container.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFFC5C2C8)
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(R.drawable.nhh_banner),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.11f },
+            contentScale = ContentScale.Crop
         )
-        Spacer(Modifier.height(30.dp))
-        Button(
-            onClick = onSelectZip,
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-            shape = MaterialTheme.shapes.extraLarge
+        Box(Modifier.fillMaxSize().background(Color(0xF5160B0B)))
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Icon(Icons.Default.Description, contentDescription = null)
-            Spacer(Modifier.width(12.dp))
-            Text("SELECT GAME ZIP", style = MaterialTheme.typography.titleMedium)
-        }
-        if (!error.isNullOrBlank()) {
-            Spacer(Modifier.height(18.dp))
-            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(R.drawable.nhh_logo),
+                    contentDescription = null,
+                    modifier = Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text("No Heroes Here", style = MaterialTheme.typography.headlineSmall)
+                    Text("Game Setup & Launcher", color = Color(0xFFCFAFA8))
+                }
+            }
 
+            Image(
+                painter = painterResource(R.drawable.nhh_banner),
+                contentDescription = "No H
 @Composable
 private fun MainMenu(error: String?, onRun: () -> Unit, onSettings: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 30.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.Start
-    ) {
-        Text("NHH LAUNCHER", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
-        Spacer(Modifier.height(10.dp))
-        Text("No Heroes Here", style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(8.dp))
-        Text("Game files imported", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBEB8CA))
-        Spacer(Modifier.height(30.dp))
-        Button(
-            onClick = onRun,
-            modifier = Modifier.fillMaxWidth().height(68.dp),
-            shape = MaterialTheme.shapes.extraLarge
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null)
-            Spacer(Modifier.width(12.dp))
-            Text("RUN GAME", style = MaterialTheme.typography.titleLarge)
-        }
-        Spacer(Modifier.height(10.dp))
-        FilledTonalButton(
-            onClick = onSettings,
-            modifier = Modifier.fillMaxWidth().height(58.dp),
-            shape = MaterialTheme.shapes.extraLarge
-        ) {
-            Icon(Icons.Default.Settings, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("SETTINGS")
-        }
-        if (!error.isNullOrBlank()) {
-            Spacer(Modifier.height(20.dp))
-            Text("Launch failed", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.height(4.dp))
-            Text(error, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFE6C9D0))
-        }
-    }
-}
-
-@Composable
-private fun SettingsScreen(
-    onBack: () -> Unit,
-    onReimport: () -> Unit,
-    onWinlatorSettings: () -> Unit,
-    onContainerSettings: () -> Unit,
-    onInputControls: () -> Unit
-) {
-    Column(Modifier.fillMaxSize().padding(24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Settings", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onBack) { Text("DONE") }
-        }
-        Spacer(Modifier.height(18.dp))
-        Text("Winlator runtime", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "The game uses the upstream Winlator runtime directly: Wine, Box64, graphics, audio, display and input controls.",
-            color = Color(0xFFAAAAAA)
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(R.drawable.nhh_banner),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.10f },
+            contentScale = ContentScale.Crop
         )
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onWinlatorSettings, modifier = Modifier.fillMaxWidth()) { Text("WINLATOR GLOBAL SETTINGS") }
-        Spacer(Modifier.height(10.dp))
-        Button(onClick = onContainerSettings, modifier = Modifier.fillMaxWidth()) { Text("WINLATOR CONTAINER SETTINGS") }
-        Spacer(Modifier.height(10.dp))
-        Button(onClick = onInputControls, modifier = Modifier.fillMaxWidth()) { Text("INPUT CONTROLS") }
-        Spacer(Modifier.height(22.dp))
-        Text("Game", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(10.dp))
-        OutlinedButton(onClick = onReimport, modifier = Modifier.fillMaxWidth()) { Text("RE-IMPORT GAME ZIP") }
+        Box(Modifier.fillMaxSize().background(Color(0xF0160B0B)))
+
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(R.drawable.nhh_logo),
+                    contentDescription = null,
+                    modifier = Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("No Heroes Here", style = MaterialTheme.typography.headlineSmall)
+                    Text("Ready to Play", color = Color(0xFFCFAFA8))
+                }
+                TextButton(onClick = onSettings) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                }
+            }
+
+            Image(
+                painter = painterResource(R.drawable.nhh_banner),
+                contentDescription = "No Heroes Here",
+                modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(22.dp)),
+                contentScale = ContentScale.Crop
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xE5221111))
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("GAME LAUNCHER", style = MaterialTheme.typography.titleMedium)
+                    Text("The game setup is complete. Launch and play No Heroes Here.", color = Color(0xFFD5BCB7))
+                    Button(
+                        onClick = onRun,
+                        modifier = Modifier.fillMaxWidth().height(70.dp),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Text("RUN GAME", style = MaterialTheme.typography.titleLarge)
+                    }
+                    FilledTonalButton(
+                        onClick = onSettings,
+                        modifier = Modifier.fillMaxWidth().height(58.dp),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("SETTINGS")
+                    }
+                }
+            }
+
+            if (!error.isNullOrBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF321717)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Launch failed", color = Color(0xFFFF8A76), style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text(error, color = Color(0xFFE6C9D0))
+                    }
+                }
+            }
+        }
     }
 }
 

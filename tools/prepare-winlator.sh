@@ -306,10 +306,8 @@ replacement = '''        if (shortcut != null) {
             int profileId = getIntent().getIntExtra("nhh_controls_profile_id", 0);
             ControlsProfile profile = inputControlsManager.getProfile(profileId);
             if (profile != null) {
-                inputControlsView.setProfile(profile);
-                profile.loadElements(inputControlsView);
                 inputControlsView.setShowTouchscreenControls(true);
-                inputControlsView.setVisibility(View.VISIBLE);
+                showInputControls(profile);
             }
             setupNhhOverlay(rootView);
         }

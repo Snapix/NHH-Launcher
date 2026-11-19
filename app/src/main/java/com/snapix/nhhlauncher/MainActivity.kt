@@ -15,6 +15,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -230,26 +237,41 @@ private fun NhhApp(context: Context, activity: MainActivity) {
 
 @Composable
 private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: String) {
+    val animatedProgress by animateFloatAsState(progress.coerceIn(0f, 1f), label = "setup-progress")
     Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            CircularProgressIndicator(modifier = Modifier.size(72.dp), strokeWidth = 6.dp)
-            Spacer(Modifier.height(28.dp))
-            Text(stage.label, style = MaterialTheme.typography.titleLarge)
-            if (stage == SetupStage.EXTRACTING) {
-                Spacer(Modifier.height(18.dp))
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(8.dp)
-                )
-                Spacer(Modifier.height(8.dp))
-                Text((progress * 100).toInt().toString() + "% extracted", style = MaterialTheme.typography.labelLarge)
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 4.dp
+            ) {
+                Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(modifier = Modifier.size(72.dp), strokeWidth = 6.dp)
+                    Spacer(Modifier.height(24.dp))
+                    AnimatedContent(
+                        targetState = stage.label,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "setup-stage"
+                    ) { label ->
+                        Text(label, style = MaterialTheme.typography.titleLarge)
+                    }
+                    if (stage == SetupStage.EXTRACTING) {
+                        Spacer(Modifier.height(18.dp))
+                        LinearProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier.fillMaxWidth().height(8.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text((animatedProgress * 100).toInt().toString() + "% extracted", style = MaterialTheme.typography.labelLarge)
+                    }
+                    if (detail.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(detail, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBEB8CA))
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("Keep NHH Launcher open.", style = MaterialTheme.typography.bodySmall, color = Color(0xFFAAA4B4))
+                }
             }
-            if (detail.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(detail, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAAAAAA))
-            }
-            Spacer(Modifier.height(10.dp))
-            Text("Do not close NHH Launcher.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAAAAAA))
         }
     }
 }
@@ -300,15 +322,8 @@ private fun MainMenu(error: String?, onRun: () -> Unit, onSettings: () -> Unit) 
         Spacer(Modifier.height(8.dp))
         Text("Game files imported", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBEB8CA))
         Spacer(Modifier.height(30.dp))
-        Button(
-            onClick = onRun,
-            modifier = Modifier.fillMaxWidth().height(68.dp),
-            shape = MaterialTheme.shapes.extraLarge
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null)
-            Spacer(Modifier.width(12.dp))
-            Text("RUN GAME", style = MaterialTheme.typography.titleLarge)
-        }
+        ExpressiveActionButton("RUN GAME", Icons.Default.PlayArrow, onRun, primary = true)
+
         Spacer(Modifier.height(10.dp))
         FilledTonalButton(
             onClick = onSettings,
@@ -516,5 +531,35 @@ private fun ExeSelectionScreen(choices: List<String>, onSelect: (String) -> Unit
         }
         Spacer(Modifier.height(12.dp))
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("CANCEL") }
+    }
+}
+
+
+@Composable
+private fun ExpressiveActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    primary: Boolean
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "button-scale")
+    val modifier = Modifier.fillMaxWidth().height(if (primary) 68.dp else 58.dp).graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+    if (primary) {
+        Button(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(22.dp), interactionSource = interaction) {
+            Icon(icon, null)
+            Spacer(Modifier.width(12.dp))
+            Text(label, style = MaterialTheme.typography.titleLarge)
+        }
+    } else {
+        FilledTonalButton(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(20.dp), interactionSource = interaction) {
+            Icon(icon, null)
+            Spacer(Modifier.width(8.dp))
+            Text(label)
+        }
     }
 }

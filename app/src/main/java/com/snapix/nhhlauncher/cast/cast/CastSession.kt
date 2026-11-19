@@ -128,21 +128,21 @@ class CastSession(val device: CastDevice) {
     // back a MEDIA_STATUS with a mediaSessionId. The UI is expected to keep the
     // buttons disabled until `state` becomes Casting; this is belt-and-suspenders.
     suspend fun pause() {
-        val tid = transportId ?: return logW("pause: no transportId yet")
-        val mid = mediaSessionId ?: return logW("pause: no mediaSessionId yet")
+        val tid = transportId ?: logW("pause: no transportId yet")
+        val mid = mediaSessionId ?: logW("pause: no mediaSessionId yet"); return
         channel.send(mediaPauseMsg(tid, mid).first)
     }
 
     suspend fun play() {
-        val tid = transportId ?: return logW("play: no transportId yet")
-        val mid = mediaSessionId ?: return logW("play: no mediaSessionId yet")
+        val tid = transportId ?: logW("play: no transportId yet"); return
+        val mid = mediaSessionId ?: logW("play: no mediaSessionId yet"); return
         channel.send(mediaPlayMsg(tid, mid).first)
     }
 
     // Volume lives on the receiver, not the media session, so it works before
     // LOAD completes. No transport/session id needed.
     suspend fun setVolume(level: Double) {
-        if (_volume.value.isFixed) return logW("setVolume: receiver reports fixed volume")
+        if (_volume.value.isFixed) logW("setVolume: receiver reports fixed volume"); return
         channel.send(setVolumeMsg(level).first)
     }
 
@@ -156,8 +156,8 @@ class CastSession(val device: CastDevice) {
     // steady-state drift correction needs. Returns immediately after the
     // write; the receiver echoes MEDIA_STATUS when the seek completes.
     suspend fun seek(seconds: Double, resumeState: String = "PLAYBACK_PAUSE") {
-        val tid = transportId ?: return logW("seek: no transportId yet")
-        val mid = mediaSessionId ?: return logW("seek: no mediaSessionId yet")
+        val tid = transportId ?: logW("seek: no transportId yet"); return
+        val mid = mediaSessionId ?: logW("seek: no mediaSessionId yet"); return
         channel.send(mediaSeekMsg(tid, mid, seconds, resumeState).first)
     }
 
@@ -166,7 +166,7 @@ class CastSession(val device: CastDevice) {
     // continuously; without this nudge the last-seen currentTime can be
     // several seconds stale.
     suspend fun requestStatus() {
-        val tid = transportId ?: return logW("requestStatus: no transportId yet")
+        val tid = transportId ?: logW("requestStatus: no transportId yet"); return
         channel.send(mediaGetStatusMsg(tid).first)
     }
 

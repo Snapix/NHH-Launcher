@@ -24,8 +24,8 @@ class CastDiscovery(context: Context) {
     val flow: StateFlow<List<CastDevice>> = _flow
 
     private val listener = object : NsdManager.DiscoveryListener {
-        override fun onDiscoveryStarted(type: String) = logI("mDNS discovery started ($type)")
-        override fun onDiscoveryStopped(type: String) = logI("mDNS discovery stopped")
+        override fun onDiscoveryStarted(type: String) { logI("mDNS discovery started ($type)") }
+        override fun onDiscoveryStopped(type: String) { logI("mDNS discovery stopped") }
         override fun onStartDiscoveryFailed(type: String, e: Int) = logE("discovery start failed $e")
         override fun onStopDiscoveryFailed(type: String, e: Int) = logE("discovery stop failed $e")
         override fun onServiceFound(info: NsdServiceInfo) {

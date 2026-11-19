@@ -11,6 +11,8 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import com.snapix.nhhlauncher.cast.cast.CastDiscovery
+import com.snapix.nhhlauncher.cast.cast.CastDevice
 
 class CastActivity : ComponentActivity() {
     private lateinit var discovery: CastDiscovery

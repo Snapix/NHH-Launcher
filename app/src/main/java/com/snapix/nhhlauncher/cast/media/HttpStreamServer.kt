@@ -1,22 +1,12 @@
 package com.snapix.nhhlauncher.cast.media
 
 import com.snapix.nhhlauncher.cast.util.logI
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.call
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
-import io.ktor.server.application.install
-import io.ktor.server.cio.CIO
-import io.ktor.server.cio.CIOApplicationEngine
-import io.ktor.server.engine.EmbeddedServer
-import io.ktor.server.engine.embeddedServer
-import io.ktor.server.plugins.autohead.AutoHeadResponse
-import io.ktor.server.plugins.cors.routing.CORS
-import io.ktor.server.response.respondBytes
-import io.ktor.server.response.respondText
-import io.ktor.server.routing.get
-import io.ktor.server.routing.routing
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.Executors
 
 class HttpStreamServer(
     private val host: String,
@@ -25,68 +15,87 @@ class HttpStreamServer(
     private val token: String,
     private val resolution: Resolution,
 ) {
-    private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
+    private var socket: ServerSocket? = null
+    private val executor = Executors.newCachedThreadPool()
+    @Volatile private var running = false
 
     fun start() {
-        engine = embeddedServer(CIO, port = port, host = host) {
-            install(AutoHeadResponse)
-            install(CORS) {
-                // Token in the URL path is the real auth gate; CORS stays wide because
-                // hls.js inside the Default Media Receiver fetches from a google.com
-                // origin that we don't want to hardcode.
-                anyHost()
-                allowMethod(HttpMethod.Get)
-                allowMethod(HttpMethod.Head)
-                allowMethod(HttpMethod.Options)
-                allowHeader(HttpHeaders.Range)
-                allowHeader(HttpHeaders.ContentType)
-                allowHeader(HttpHeaders.Accept)
-                exposeHeader(HttpHeaders.ContentLength)
-                exposeHeader(HttpHeaders.ContentRange)
-                exposeHeader(HttpHeaders.ContentType)
+        if (running) return
+        running = true
+        socket = ServerSocket(port, 32, InetAddress.getByName(host))
+        executor.execute {
+            while (running) {
+                val client = runCatching { socket?.accept() }.getOrNull() ?: break
+                executor.execute { handle(client) }
             }
-            routing {
-                get("/health") {
-                    call.respondText("OK")
-                }
-                get("/c/{token}/stream.m3u8") {
-                    if (!authorized(call.parameters["token"])) { call.respondText("not found", status = HttpStatusCode.NotFound); return@get }
-                    logI("GET stream.m3u8 (master) from ${call.request.local.remoteHost}")
-                    call.respondText(masterPlaylist, ContentType("application", "x-mpegURL"))
-                }
-                get("/c/{token}/media.m3u8") {
-                    if (!authorized(call.parameters["token"])) { call.respondText("not found", status = HttpStatusCode.NotFound); return@get }
-                    val pl = segmenter.playlist()
-                    logI("GET media.m3u8 from ${call.request.local.remoteHost}")
-                    call.respondText(pl, ContentType("application", "x-mpegURL"))
-                }
-                get("/c/{token}/seg-{seq}.ts") {
-                    if (!authorized(call.parameters["token"])) { call.respondText("not found", status = HttpStatusCode.NotFound); return@get }
-                    val seq = call.parameters["seq"]?.toIntOrNull()
-                    val bytes = seq?.let { segmenter.getSegment(it) }
-                    logI("GET seg-$seq.ts from ${call.request.local.remoteHost} -> ${if (bytes == null) "404" else "${bytes.size}B"}")
-                    if (bytes == null) call.respondText("not found", status = HttpStatusCode.NotFound)
-                    else call.respondBytes(bytes, ContentType("video", "mp2t"))
-                }
-            }
-        }.also { it.start(wait = false) }
-        logI("HTTP server listening on $host:$port (token-gated)")
+        }
+        logI("HTTP cast server listening on $host:$port")
     }
 
-    // Constant-time comparison to avoid leaking token via timing on the LAN.
-    private fun authorized(supplied: String?): Boolean {
-        if (supplied == null) return false
-        val a = supplied.toByteArray(Charsets.UTF_8)
-        val b = token.toByteArray(Charsets.UTF_8)
-        if (a.size != b.size) return false
-        var diff = 0
-        for (i in a.indices) diff = diff or (a[i].toInt() xor b[i].toInt())
-        return diff == 0
+    private fun handle(client: Socket?) {
+        if (client == null) return
+        client.use { socket ->
+            val input = BufferedInputStream(socket.getInputStream())
+            val output = BufferedOutputStream(socket.getOutputStream())
+            val request = readRequest(input) ?: return
+            val parts = request.split(' ')
+            if (parts.size < 2 || parts[0] != "GET") {
+                respond(output, 405, "text/plain", "method not allowed".toByteArray())
+                return
+            }
+            val path = parts[1].substringBefore('?')
+            val prefix = "/c/$token/"
+            if (!path.startsWith(prefix)) {
+                respond(output, 404, "text/plain", "not found".toByteArray())
+                return
+            }
+            val resource = path.removePrefix(prefix)
+            when {
+                resource == "stream.m3u8" -> respond(output, 200, "application/vnd.apple.mpegurl", masterPlaylist.toByteArray())
+                resource == "media.m3u8" -> respond(output, 200, "application/vnd.apple.mpegurl", segmenter.playlist().toByteArray())
+                resource.startsWith("seg-") && resource.endsWith(".ts") -> {
+                    val seq = resource.removePrefix("seg-").removeSuffix(".ts").toIntOrNull()
+                    val bytes = seq?.let { segmenter.getSegment(it) }
+                    if (bytes == null) respond(output, 404, "text/plain", "not found".toByteArray())
+                    else respond(output, 200, "video/mp2t", bytes)
+                }
+                resource == "health" -> respond(output, 200, "text/plain", "OK".toByteArray())
+                else -> respond(output, 404, "text/plain", "not found".toByteArray())
+            }
+        }
+    }
+
+    private fun readRequest(input: BufferedInputStream): String? {
+        val out = StringBuilder()
+        var last = 0
+        var count = 0
+        while (count++ < 8192) {
+            val b = input.read()
+            if (b < 0) return null
+            out.append(b.toChar())
+            if (last == '\r'.code && b == '\n'.code && out.endsWith("\r\n\r\n")) break
+            last = b
+        }
+        return out.toString().lineSequence().firstOrNull()
+    }
+
+    private fun respond(output: BufferedOutputStream, status: Int, type: String, body: ByteArray) {
+        val reason = when (status) { 200 -> "OK"; 404 -> "Not Found"; 405 -> "Method Not Allowed"; else -> "Error" }
+        val header = "HTTP/1.1 $status $reason\r\n" +
+            "Content-Type: $type\r\n" +
+            "Content-Length: " + body.size + "\r\n" +
+            "Cache-Control: no-cache, no-store\r\n" +
+            "Connection: close\r\n\r\n"
+        output.write(header.toByteArray())
+        output.write(body)
+        output.flush()
     }
 
     fun stop() {
-        engine?.stop(500, 1000)
-        engine = null
+        running = false
+        runCatching { socket?.close() }
+        socket = null
+        executor.shutdownNow()
     }
 
     private val masterPlaylist: String
@@ -97,10 +106,10 @@ class HttpStreamServer(
                 else -> "1E"
             }
             return "#EXTM3U\n" +
-                "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=${resolution.bitrate}," +
-                "CODECS=\"avc1.42E0$avcLevel\"," +
-                "RESOLUTION=${resolution.width}x${resolution.height}," +
-                "NAME=\"${resolution.label}\"\n" +
+                "#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=" + resolution.bitrate +
+                ",CODECS=\"avc1.42E0" + avcLevel + "\"" +
+                ",RESOLUTION=" + resolution.width + "x" + resolution.height +
+                ",NAME=\"" + resolution.label + "\"\n" +
                 "media.m3u8\n"
         }
 }

@@ -215,7 +215,7 @@ object WinlatorRuntime {
             .map { it.letter + ":" + it.path }
             .toMutableList()
         driveEntries.add(GAME_DRIVE + ":" + canonicalRoot.absolutePath)
-        container.setDrives(driveEntries.joinToString(separator = ""))
+        container.setDrives(driveEntries.joinToString(separator = " "))
     }
 
     private fun ensureControlsProfile(context: Context): Int {

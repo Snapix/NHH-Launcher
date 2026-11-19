@@ -435,14 +435,7 @@ if "private void setupNhhOverlay" not in s:
         });
         exit.setOnClickListener(v -> finish());
     }
-'''
-    s = s[:insert_at] + method + s[insert_at:]
 
-p.write_text(s)
-PY
-
-echo "Prepared the full Winlator application with the NHH launcher front-end."
-echo "Prepared the full Winlator application with the NHH launcher front-end."
     @Override
     protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -454,4 +447,11 @@ echo "Prepared the full Winlator application with the NHH launcher front-end."
             startActivity(projection);
         }
     }
+'''
+    s = s[:insert_at] + method + s[insert_at:]
 
+p.write_text(s)
+PY
+
+echo "Prepared the full Winlator application with the NHH launcher front-end."
+echo "Prepared the full Winlator application with the NHH launcher front-end."

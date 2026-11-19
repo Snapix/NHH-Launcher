@@ -89,7 +89,7 @@ object WinlatorRuntime {
         prefs: SharedPreferences,
         onProgress: (Float, String) -> Unit
     ) {
-        ensureReady(activity, gameExe, prefs, onProgress, forceRebuild = true)
+        ensureReady(activity, gameExe, prefs, onProgress, forceRebuild = false)
     }
 
     suspend fun ensureReady(
@@ -106,31 +106,52 @@ object WinlatorRuntime {
             "The NHH executable is outside the imported game folder. Re-import the game ZIP."
         }
 
-        val rootFS = RootFS.find(activity)
+        var rootFS = RootFS.find(activity)
         if (!rootFS.isValid() || rootFS.getVersion() < rootfsVersion) {
+            appendLaunchLog(activity, "Winlator rootfs missing/outdated. Starting bootstrap.")
             withContext(Dispatchers.Main.immediate) {
                 onProgress(0.02f, "Installing system files…")
                 RootFSInstaller.installIfNeeded(activity)
             }
 
             var waited = 0L
-            while (!rootFS.isValid() || rootFS.getVersion() < rootfsVersion) {
+            while (true) {
                 delay(300)
                 waited += 300
-                if (waited > 15 * 60 * 1000L) {
-                    throw IllegalStateException("Winlator Bootstrap did not finish. Check the launcher diagnostics.")
-                }
+                rootFS = RootFS.find(activity)
                 val installProgress = RootFSInstaller.getNhhInstallProgress()
-                if (installProgress < 0) {
-                    throw IllegalStateException("Winlator system-file installation failed.")
+
+                if (rootFS.isValid() && rootFS.getVersion() >= rootfsVersion) {
+                    appendLaunchLog(activity, "Winlator rootfs bootstrap completed.")
+                    withContext(Dispatchers.Main.immediate) {
+                        onProgress(0.38f, "System files installed.")
+                    }
+                    break
                 }
+
+                if (installProgress < 0) {
+                    appendLaunchLog(activity, "Winlator rootfs bootstrap reported failure.")
+                    throw IllegalStateException("Winlator system-file installation failed. Try Run Game again.")
+                }
+
+                if (waited > 15 * 60 * 1000L) {
+                    throw IllegalStateException("Winlator Bootstrap timed out. Check the launcher diagnostics.")
+                }
+
                 withContext(Dispatchers.Main.immediate) {
                     val fraction = if (installProgress > 0) installProgress / 100f else 0.02f
-                    onProgress(fraction.coerceIn(0.02f, 0.38f), "Installing system files… " + installProgress + "%")
+                    onProgress(
+                        fraction.coerceIn(0.02f, 0.38f),
+                        if (installProgress > 0) {
+                            "Installing system files… " + installProgress + "%"
+                        } else {
+                            "Installing system files…"
+                        }
+                    )
                 }
             }
         }
-
+        appendLaunchLog(activity, "Preparing NHH input profile.")
         val controlsProfileId = ensureControlsProfile(activity)
         val manager = ContainerManager(activity)
         val oldId = prefs.getInt(PREF_CONTAINER_ID, 0)
@@ -154,6 +175,7 @@ object WinlatorRuntime {
         }
 
         val container = createContainer(manager, activity)
+        appendLaunchLog(activity, "NHH container created: " + container.id)
 
         withContext(Dispatchers.Main.immediate) {
             onProgress(0.72f, "Mapping the imported game folder to drive G:…")
@@ -172,6 +194,7 @@ object WinlatorRuntime {
             manager.removeContainerAsync(oldContainer) {}
         }
 
+        appendLaunchLog(activity, "NHH runtime ready. Container=" + container.id)
         withContext(Dispatchers.Main.immediate) {
             onProgress(1f, "Winlator container created. NHH is ready to launch.")
         }

@@ -81,7 +81,7 @@ class CastActivity : ComponentActivity() {
     }
 
     private fun requestProjection(device: CastDevice) {
-        val intent = Intent(this, MediaProjectionRequestActivity::class.java).apply {
+        val result = Intent().apply {
             putExtra(CastForegroundService.EXTRA_DEVICE_NAME, device.name)
             putExtra(CastForegroundService.EXTRA_DEVICE_HOST, device.host)
             putExtra(CastForegroundService.EXTRA_DEVICE_PORT, device.port)
@@ -90,7 +90,7 @@ class CastActivity : ComponentActivity() {
             putExtra(CastForegroundService.EXTRA_WINDOW_SIZE, 3)
             putExtra(CastForegroundService.EXTRA_LIVE_EDGE, 1.0)
         }
-        startActivity(intent)
+        setResult(RESULT_OK, result)
         finish()
     }
 

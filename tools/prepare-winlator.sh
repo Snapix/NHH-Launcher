@@ -430,7 +430,7 @@ if "private void setupNhhOverlay" not in s:
             menu.setVisibility(View.GONE);
         });
         cast.setOnClickListener(v -> {
-            startActivity(new android.content.Intent(this, com.snapix.nhhlauncher.cast.CastActivity.class));
+            startActivityForResult(new android.content.Intent(this, com.snapix.nhhlauncher.cast.CastActivity.class), 7101);
             menu.setVisibility(View.GONE);
         });
         exit.setOnClickListener(v -> finish());
@@ -443,3 +443,15 @@ PY
 
 echo "Prepared the full Winlator application with the NHH launcher front-end."
 echo "Prepared the full Winlator application with the NHH launcher front-end."
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 7101 && resultCode == RESULT_OK && data != null) {
+            android.content.Intent projection = new android.content.Intent(
+                this, com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity.class
+            );
+            projection.putExtras(data);
+            startActivity(projection);
+        }
+    }
+

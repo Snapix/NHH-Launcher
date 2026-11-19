@@ -18,6 +18,8 @@ import com.winlator.inputcontrols.InputControlsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -57,6 +59,7 @@ object WinlatorRuntime {
         Box64Preset.PERFORMANCE
     )
     @Volatile private var crashRecorderInstalled = false
+    private val setupLock = Mutex()
 
     @Synchronized
     fun installCrashRecorder(context: Context) {
@@ -98,7 +101,8 @@ object WinlatorRuntime {
         prefs: SharedPreferences,
         onProgress: (Float, String) -> Unit,
         forceRebuild: Boolean = false
-    ) = withContext(Dispatchers.IO) {
+    ) = setupLock.withLock {
+        withContext(Dispatchers.IO) {
         val canonicalExe = gameExe.canonicalFile
         val gameRoot = File(activity.filesDir, "game").canonicalFile
         require(canonicalExe.isFile) { "The selected NHH executable no longer exists." }
@@ -198,6 +202,7 @@ object WinlatorRuntime {
         withContext(Dispatchers.Main.immediate) {
             onProgress(1f, "Winlator container created. NHH is ready to launch.")
         }
+    }
     }
 
     private fun mapGameDrive(container: Container, gameRoot: File) {

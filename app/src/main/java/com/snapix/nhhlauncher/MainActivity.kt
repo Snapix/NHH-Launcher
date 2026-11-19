@@ -6,22 +6,17 @@ import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +58,26 @@ private fun NhhApp(context: Context, activity: MainActivity) {
     var setupProgress by remember { mutableFloatStateOf(0f) }
     var setupDetail by remember { mutableStateOf("") }
     var exeChoices by remember { mutableStateOf<List<String>>(emptyList()) }
+    var runtimeSettings by remember { mutableStateOf(LauncherRuntimeSettings()) }
+    var settingsSaving by remember { mutableStateOf(false) }
+    var settingsFeedback by remember { mutableStateOf<String?>(null) }
+    var settingsError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    fun openSettings() {
+        scope.launch {
+            try {
+                runtimeSettings = withContext(Dispatchers.IO) {
+                    WinlatorRuntime.loadSettings(activity, prefs)
+                }
+                settingsFeedback = null
+                settingsError = null
+                settings = true
+            } catch (t: Throwable) {
+                error = "Could not load runtime settings: " + (t.message ?: "unknown error")
+            }
+        }
+    }
 
     lateinit var picker: androidx.activity.result.ActivityResultLauncher<Array<String>>
     fun selectZip() {
@@ -110,14 +124,15 @@ private fun NhhApp(context: Context, activity: MainActivity) {
 
     MaterialTheme(
         colorScheme = darkColorScheme(
-            background = Color(0xFF19181D),
-            surface = Color(0xFF242328),
-            surfaceContainer = Color(0xFF29282E),
-            primary = Color(0xFFFFB82E),
-            onPrimary = Color(0xFF2A1800),
-            secondary = Color(0xFFB9D98A),
-            onBackground = Color(0xFFF5F2F7),
-            onSurface = Color(0xFFF5F2F7)
+            background = Color(0xFF121019),
+            surface = Color(0xFF211D2B),
+            surfaceContainer = Color(0xFF2A2537),
+            primary = Color(0xFFC99BFF),
+            onPrimary = Color(0xFF28113C),
+            secondary = Color(0xFF55CFF0),
+            tertiary = Color(0xFFFFA7AD),
+            onBackground = Color(0xFFF6F1FC),
+            onSurface = Color(0xFFF6F1FC)
         )
     ) {
         Surface(Modifier.fillMaxSize()) {
@@ -150,21 +165,46 @@ private fun NhhApp(context: Context, activity: MainActivity) {
                     }
                 )
                 setupStage != null -> SetupProgressScreen(setupStage!!, setupProgress, setupDetail)
-                settings -> SettingsScreen(
+                settings -> LauncherSettingsScreen(
+                    settings = runtimeSettings,
+                    isSaving = settingsSaving,
+                    feedback = settingsFeedback,
+                    error = settingsError,
+                    onChange = {
+                        runtimeSettings = it
+                        settingsFeedback = null
+                        settingsError = null
+                    },
+                    onSave = {
+                        scope.launch {
+                            settingsSaving = true
+                            settingsFeedback = null
+                            settingsError = null
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    WinlatorRuntime.saveSettings(activity, prefs, runtimeSettings)
+                                }
+                                settingsFeedback = "Settings saved. They will apply on the next game launch."
+                            } catch (t: Throwable) {
+                                settingsError = t.message ?: "Could not save runtime settings."
+                            } finally {
+                                settingsSaving = false
+                            }
+                        }
+                    },
                     onBack = { settings = false },
-                    onReimport = { selectZip() },
-                    onWinlatorSettings = { WinlatorRuntime.openGlobalSettings(activity) },
-                    onContainerSettings = { WinlatorRuntime.openContainerSettings(activity) },
-                    onInputControls = { WinlatorRuntime.openInputControls(activity) }
+                    onReimport = { selectZip() }
                 )
                 gameExe == null || !File(gameExe!!).isFile -> SetupScreen(
                     error = error,
                     onSelectZip = { selectZip() }
                 )
                 else -> MainMenu(
+                    error = error,
                     onRun = {
                         scope.launch {
                             try {
+                                error = null
                                 setupStage = SetupStage.BOOTSTRAP
                                 setupDetail = "Checking Winlator runtime…"
                                 WinlatorRuntime.ensureReady(activity, File(gameExe!!), prefs, onProgress = { progress, detail ->
@@ -179,7 +219,7 @@ private fun NhhApp(context: Context, activity: MainActivity) {
                             }
                         }
                     },
-                    onSettings = { settings = true }
+                    onSettings = { openSettings() }
                 )
             }
         }
@@ -215,20 +255,20 @@ private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: Stri
 @Composable
 private fun SetupScreen(error: String?, onSelectZip: () -> Unit) {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 30.dp),
+        Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 34.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.Start
     ) {
-        Poster()
-        Spacer(Modifier.height(28.dp))
-        Text("NHH Launcher", style = MaterialTheme.typography.displaySmall)
+        Text("NHH", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+        Spacer(Modifier.height(10.dp))
+        Text("No Heroes Here", style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(10.dp))
         Text(
-            "Select your NHH game ZIP to set up the launcher.",
+            "Import your game files to create the Winlator container.",
             style = MaterialTheme.typography.bodyLarge,
             color = Color(0xFFC5C2C8)
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(30.dp))
         Button(
             onClick = onSelectZip,
             modifier = Modifier.fillMaxWidth().height(64.dp),
@@ -238,40 +278,50 @@ private fun SetupScreen(error: String?, onSelectZip: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Text("SELECT GAME ZIP", style = MaterialTheme.typography.titleMedium)
         }
-        error?.let {
-            Spacer(Modifier.height(16.dp))
-            Text(it, color = MaterialTheme.colorScheme.error)
+        if (!error.isNullOrBlank()) {
+            Spacer(Modifier.height(18.dp))
+            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
 @Composable
-private fun MainMenu(onRun: () -> Unit, onSettings: () -> Unit) {
+private fun MainMenu(error: String?, onRun: () -> Unit, onSettings: () -> Unit) {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 30.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.Start
     ) {
-        Poster()
-        Spacer(Modifier.height(24.dp))
+        Text("NHH LAUNCHER", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+        Spacer(Modifier.height(10.dp))
+        Text("No Heroes Here", style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(8.dp))
+        Text("Game files imported", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBEB8CA))
+        Spacer(Modifier.height(30.dp))
         Button(
             onClick = onRun,
-            modifier = Modifier.fillMaxWidth().height(64.dp),
+            modifier = Modifier.fillMaxWidth().height(68.dp),
             shape = MaterialTheme.shapes.extraLarge
         ) {
-            Icon(Icons.Default.SportsEsports, contentDescription = null)
+            Icon(Icons.Default.PlayArrow, contentDescription = null)
             Spacer(Modifier.width(12.dp))
-            Text("RUN GAME", style = MaterialTheme.typography.titleMedium)
+            Text("RUN GAME", style = MaterialTheme.typography.titleLarge)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         FilledTonalButton(
             onClick = onSettings,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            modifier = Modifier.fillMaxWidth().height(58.dp),
             shape = MaterialTheme.shapes.extraLarge
         ) {
             Icon(Icons.Default.Settings, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("SETTINGS")
+        }
+        if (!error.isNullOrBlank()) {
+            Spacer(Modifier.height(20.dp))
+            Text("Launch failed", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(4.dp))
+            Text(error, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFE6C9D0))
         }
     }
 }
@@ -306,48 +356,6 @@ private fun SettingsScreen(
         Text("Game", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = onReimport, modifier = Modifier.fillMaxWidth()) { Text("RE-IMPORT GAME ZIP") }
-    }
-}
-
-@Composable
-private fun Poster() {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.75f)
-            .clip(RoundedCornerShape(30.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF49B8F2), Color(0xFF7CD5FF), Color(0xFF5D743B), Color(0xFF26301B))
-                )
-            )
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(30.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("NHH", style = MaterialTheme.typography.displayLarge, color = Color(0xFFE92B1B))
-            Surface(color = Color(0xFFF5D65C), shape = RoundedCornerShape(22.dp)) {
-                Text(
-                    "HEROES",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = Color(0xFF247B36)
-                )
-            }
-            Text("HERE", style = MaterialTheme.typography.displayMedium, color = Color(0xFFE92B1B))
-            Spacer(Modifier.height(28.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                listOf(Color(0xFFB83E2B), Color(0xFFF2A13A), Color(0xFF5A9A3A), Color(0xFF3280B6)).forEach {
-                    Box(Modifier.size(58.dp).clip(RoundedCornerShape(50)).background(it))
-                }
-            }
-        }
-        Text(
-            "NO HERO'S HERE",
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White.copy(alpha = 0.82f)
-        )
     }
 }
 

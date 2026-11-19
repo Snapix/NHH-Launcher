@@ -182,4 +182,29 @@ s = s.replace("new Handler()", "new Handler(Looper.getMainLooper())")
 p.write_text(s)
 PY
 
+# Allow the direct exec_path launch route to attach the chosen Winlator
+# input-control profile without depending on a .desktop shortcut parser.
+XSERVER_DISPLAY="$WINLATOR_APP/src/main/java/com/winlator/XServerDisplayActivity.java"
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+needle = "        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));"
+insert = """        if (shortcut == null) {
+            int nhhControlsProfileId = getIntent().getIntExtra("nhh_controls_profile_id", 0);
+            if (nhhControlsProfileId > 0) {
+                ControlsProfile nhhProfile = inputControlsManager.getProfile(nhhControlsProfileId);
+                if (nhhProfile != null) showInputControls(nhhProfile);
+            }
+        }
+
+"""
+if "nhh_controls_profile_id" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate Winlator input controls initialization")
+    s = s.replace(needle, insert + needle, 1)
+p.write_text(s)
+PY
+
 echo "Prepared the full Winlator application with the NHH launcher front-end."

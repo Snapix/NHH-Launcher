@@ -131,15 +131,15 @@ private fun NhhApp(context: Context, activity: MainActivity) {
 
     MaterialTheme(
         colorScheme = darkColorScheme(
-            background = Color(0xFF121019),
-            surface = Color(0xFF211D2B),
-            surfaceContainer = Color(0xFF2A2537),
-            primary = Color(0xFFC99BFF),
-            onPrimary = Color(0xFF28113C),
-            secondary = Color(0xFF55CFF0),
-            tertiary = Color(0xFFFFA7AD),
-            onBackground = Color(0xFFF6F1FC),
-            onSurface = Color(0xFFF6F1FC)
+            background = Color(0xFF160B0B),
+            surface = Color(0xFF2A1212),
+            surfaceContainer = Color(0xFF3A1B1B),
+            primary = Color(0xFFFF6755),
+            onPrimary = Color(0xFFFFFFFF),
+            secondary = Color(0xFFFFB35C),
+            tertiary = Color(0xFFFF8A76),
+            onBackground = Color(0xFFFFE8E2),
+            onSurface = Color(0xFFFFE8E2)
         )
     ) {
         Surface(Modifier.fillMaxSize()) {

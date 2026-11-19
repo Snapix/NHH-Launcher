@@ -282,7 +282,6 @@ private fun NhhApp(context: Context, activity: MainActivity) {
 }
 
 @Composable
-@Composable
 private fun LauncherHeader(
     subtitle: String,
     onBack: (() -> Unit)? = null,
@@ -399,7 +398,6 @@ private fun SetupSteps(active: Int) {
 }
 
 @Composable
-@Composable
 private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: String) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         LauncherHeader("Setting up game")
@@ -415,7 +413,6 @@ private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: Stri
     }
 }
 
-@Composable
 @Composable
 private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -434,7 +431,6 @@ private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> U
     }
 }
 
-@Composable
 @Composable
 private fun MainMenu(gameExeName: String, error: String?, onBack: () -> Unit, onRun: () -> Unit, onSettings: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

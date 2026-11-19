@@ -22,7 +22,13 @@ import com.snapix.nhhlauncher.cast.cast.CastDevice
 class CastActivity : ComponentActivity() {
     private val nearbyPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { startDiscovery() }
+    ) { granted ->
+        if (granted) {
+            startDiscovery()
+        } else {
+            status.text = "Nearby devices permission is required for Cast discovery."
+        }
+    }
     private lateinit var discovery: CastDiscovery
     private lateinit var list: LinearLayout
     private lateinit var status: TextView

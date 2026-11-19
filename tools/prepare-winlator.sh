@@ -463,7 +463,7 @@ replacement = """        if (requestCode == 7101 && resultCode == Activity.RESUL
             return;
         }
 
-${needle}"""
+""" + needle
 s = s.replace(needle, replacement, 1)
 p.write_text(s)
 PY

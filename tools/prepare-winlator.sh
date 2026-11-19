@@ -202,7 +202,7 @@ method = r'''    public static void install(final MainActivity activity) {
 
 '''
 s = s[:start] + method + s[end:]
-if "NHH_INSTALL_PROGRESS" not in s:
+if "getNhhInstallProgress" not in s:
     s = s.replace(
         'public static final String FILENAME = "rootfs.tzst";',
         '''public static final String FILENAME = "rootfs.tzst";

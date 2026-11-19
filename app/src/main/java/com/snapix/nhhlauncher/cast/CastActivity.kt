@@ -1,20 +1,28 @@
 package com.snapix.nhhlauncher.cast
 
+import android.Manifest
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Build
+import android.provider.Settings
+import android.content.pm.PackageManager
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.snapix.nhhlauncher.cast.cast.CastDiscovery
 import com.snapix.nhhlauncher.cast.cast.CastDevice
 
 class CastActivity : ComponentActivity() {
+    private val nearbyPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { startDiscovery() }
     private lateinit var discovery: CastDiscovery
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
@@ -48,6 +56,18 @@ class CastActivity : ComponentActivity() {
         }
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
 
+        val wireless = Button(this).apply {
+            text = "WIRELESS DISPLAY"
+            setOnClickListener {
+                runCatching {
+                    startActivity(Intent("android.settings.CAST_SETTINGS"))
+                }.recoverCatching {
+                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                }
+            }
+        }
+        root.addView(wireless, LinearLayout.LayoutParams(-1, 54))
+
         val close = Button(this).apply {
             text = "CLOSE"
             setOnClickListener { finish() }
@@ -76,6 +96,16 @@ class CastActivity : ComponentActivity() {
                     })
                 }
             }
+        }
+        startDiscovery()
+    }
+
+    private fun startDiscovery() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED
+        ) {
+            nearbyPermissionLauncher.launch(Manifest.permission.NEARBY_WIFI_DEVICES)
+            return
         }
         discovery.start()
     }

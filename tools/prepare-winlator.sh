@@ -251,6 +251,86 @@ if "private static volatile int NHH_INSTALL_PROGRESS" not in s:
 p.write_text(s)
 PY
 
+# Patch Winlator's touch routing so multi-touch controls are dispatched once.
+# The upstream move path forwards the whole MotionEvent to the touchpad once per
+# pointer when no control handled that pointer. That can duplicate mouse motion
+# and steal/consume multi-touch events from the virtual gamepad.
+INPUT_CONTROLS="$WINLATOR_APP/src/main/java/com/winlator/widget/InputControlsView.java"
+python3 - "$INPUT_CONTROLS" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+
+old = '''                case MotionEvent.ACTION_MOVE: {
+                    for (byte i = 0, count = (byte)event.getPointerCount(); i < count; i++) {
+                        float x = event.getX(i);
+                        float y = event.getY(i);
+                        int movePointerId = event.getPointerId(i);
+
+                        handled = false;
+                        for (ControlElement element : profile.getElements()) {
+                            if (element.handleTouchMove(movePointerId, x, y)) handled = true;
+                        }
+                        if (!handled) touchpadView.onTouchEvent(event);
+                    }
+                    break;
+                }'''
+new = '''                case MotionEvent.ACTION_MOVE: {
+                    // A single MotionEvent contains all active pointers. Do not
+                    // forward that same event to the touchpad once per pointer:
+                    // doing so duplicates mouse movement and can interfere with
+                    // simultaneous stick + button touches.
+                    boolean anyControlHandled = false;
+                    for (byte i = 0, count = (byte)event.getPointerCount(); i < count; i++) {
+                        float x = event.getX(i);
+                        float y = event.getY(i);
+                        int movePointerId = event.getPointerId(i);
+
+                        for (ControlElement element : profile.getElements()) {
+                            if (element.handleTouchMove(movePointerId, x, y)) {
+                                anyControlHandled = true;
+                            }
+                        }
+                    }
+                    if (!anyControlHandled) touchpadView.onTouchEvent(event);
+                    break;
+                }'''
+if old not in s:
+    raise SystemExit("InputControlsView ACTION_MOVE block not found")
+s = s.replace(old, new, 1)
+
+# Rehydrate normalized coordinates whenever the overlay is resized/rotated.
+# This keeps the saved layout aligned with the actual runtime surface.
+needle = '''    public InputControlsView(Context context) {
+        super(context);
+        setClickable(true);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+        setBackgroundColor(0x00000000);
+        setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+'''
+addition = needle + '''
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (w > 0 && h > 0 && profile != null) {
+            // ControlElement positions are persisted as normalized coordinates.
+            // Reload them against the new surface dimensions instead of leaving
+            // pixel coordinates from the previous orientation/display size.
+            profile.loadElements(this);
+            invalidate();
+        }
+    }
+'''
+if needle not in s:
+    raise SystemExit("InputControlsView constructor not found")
+s=s.replace(needle,addition,1)
+
+p.write_text(s)
+PY
+
 # Download real No Heroes Here artwork into Android resources. No generated SVGs
 # or placeholder art are used.
 ASSET_DIR="$WINLATOR_APP/src/main/res/drawable-nodpi"
@@ -309,8 +389,16 @@ replacement = '''        if (shortcut != null) {
             int profileId = getIntent().getIntExtra("nhh_controls_profile_id", 0);
             ControlsProfile profile = inputControlsManager.getProfile(profileId);
             if (profile != null) {
+                // Load the profile before the first frame/input event. This is
+                // important because ControlsProfile.isVirtualGamepad() is set
+                // while elements are loaded; otherwise the first Xbox-style
+                // touch can update state without publishing a virtual pad.
+                profile.loadElements(inputControlsView);
+                profile.loadControllers();
                 inputControlsView.setShowTouchscreenControls(true);
                 showInputControls(profile);
+                inputControlsView.requestFocus();
+                inputControlsView.bringToFront();
             }
             setupNhhOverlay(rootView);
         }

@@ -28,6 +28,10 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android build dependencies
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;24.0.8215888" "cmake;3.22.1"
+
       - name: Prepare NHH + Winlator sources
         run: bash tools/prepare-winlator.sh
 

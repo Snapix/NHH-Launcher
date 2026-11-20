@@ -210,8 +210,20 @@ object WinlatorRuntime {
 
     private fun ensureControlsProfile(context: Context): Int {
         val manager = InputControlsManager(context)
-        val profile = manager.getProfile(3)
+        val builtin = manager.getProfile(3)
             ?: throw IllegalStateException("The built-in Virtual Gamepad profile is missing from the Winlator runtime.")
+
+        // Never use Winlator's built-in profile as the user's NHH profile.
+        // Winlator refreshes built-in profiles on app-version changes, which
+        // can silently overwrite the user's control layout.
+        val existing = manager.getProfiles(true).firstOrNull {
+            it.getName() == "NHH Virtual Gamepad"
+        }
+        val profile = existing ?: manager.duplicateProfile(builtin).also {
+            it.setName("NHH Virtual Gamepad")
+            it.save()
+        }
+
         profile.loadControllers()
         return profile.id
     }

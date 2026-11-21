@@ -48,8 +48,18 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Validate Gradle project wiring
+        run: |
+          test -f build.gradle
+          test -f settings.gradle.kts
+          test -f gradle.properties
+          test -d winlator-app/app
+          grep -q 'project(":app").projectDir = file("winlator-app/app")' settings.gradle.kts
+          grep -q "com.android.tools.build:gradle:8.4.2" build.gradle
+          grep -q "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24" build.gradle
+
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Verify NHH launcher is the Android launcher activity
         run: |

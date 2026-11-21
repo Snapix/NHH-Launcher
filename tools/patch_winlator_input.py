@@ -56,7 +56,7 @@ method = """    @Override
 """
 if marker not in s:
     raise SystemExit("InputControlsView onKeyEvent anchor not found")
-if "NhhControllerRuntime.onViewportChanged(null, this)" not in s:
+if "NhhControllerRuntime.onViewportChanged(this)" not in s:
     s = s.replace(marker, method + marker, 1)
 
 path.write_text(s)

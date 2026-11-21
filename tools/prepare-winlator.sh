@@ -56,6 +56,27 @@ cp "$NHH_SOURCE/NhhControllerRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix
 cp "$NHH_SOURCE/ControllerTestScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControllerTestScreen.kt"
 rm -rf "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/cast"
 cp -r "$NHH_SOURCE/cast" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/"
+# 2b. Install only the two supplied NHH controller layouts.
+NHH_PROFILE_ASSETS="$WINLATOR_APP/src/main/assets/inputcontrols/profiles"
+mkdir -p "$NHH_PROFILE_ASSETS"
+rm -f "$NHH_PROFILE_ASSETS"/*.icp
+cp "app/src/main/assets/nhh_controls/controls-5.icp" "$NHH_PROFILE_ASSETS/controls-5.icp"
+cp "app/src/main/assets/nhh_controls/controls-6.icp" "$NHH_PROFILE_ASSETS/controls-6.icp"
+
+# 2c. Download real No Heroes Here artwork for the launcher; no SVG/mock artwork.
+NHH_DRAWABLES="$WINLATOR_APP/src/main/res/drawable-nodpi"
+mkdir -p "$NHH_DRAWABLES"
+curl -L --fail --retry 3 "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/696140/header.jpg?t=1726857314" -o "$NHH_DRAWABLES/nhh_hero.jpg"
+curl -L --fail --retry 3 "https://image.api.playstation.com/cdn/UP3562/CUSA12079_00/2LwCzU02fXbDK7wIcCYRHhuRf6zJSqib.png" -o "$NHH_DRAWABLES/nhh_poster.png"
+cp "$NHH_DRAWABLES/nhh_poster.png" "$NHH_DRAWABLES/nhh_icon.png"
+rm -rf /tmp/nhh-gif-frames
+mkdir -p /tmp/nhh-gif-frames
+for i in 0 1 2 3 4 5 6 7; do
+    convert "$NHH_DRAWABLES/nhh_hero.jpg" -resize "720x" -gravity center -crop "$((92 + i * 4))%x$((92 + i * 4))%+0+0" +repage -resize 640x360 "/tmp/nhh-gif-frames/frame-$i.jpg"
+done
+convert -delay 9 -loop 0 /tmp/nhh-gif-frames/frame-*.jpg "$NHH_DRAWABLES/nhh_gameplay.gif"
+
+
 
 # 3. Patch the rootfs installer so NHH can show setup progress without Winlator's launcher UI.
 ROOTFS_INSTALLER="$WINLATOR_APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
@@ -337,6 +358,34 @@ if "NhhControllerRuntime.onViewportChanged(this, inputControlsView)" not in s:
     }
 '''
     s = s[:idx] + method + s[idx:]
+p.write_text(s)
+PY
+
+
+# 2d. Register NHH first-run and controller activities in the final Winlator manifest.
+python3 - "$MANIFEST" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1])
+s=p.read_text()
+anchor='        <activity android:name="com.snapix.nhhlauncher.MainActivity"'
+block='''        <activity android:name="com.snapix.nhhlauncher.OnboardingActivity"
+            android:theme="@style/AppThemeDark"
+            android:exported="false"
+            android:screenOrientation="sensor" />
+        <activity android:name="com.snapix.nhhlauncher.ControlsActivity"
+            android:theme="@style/AppThemeDark"
+            android:exported="false"
+            android:screenOrientation="sensor" />
+        <activity android:name="com.snapix.nhhlauncher.ControllerTestActivity"
+            android:theme="@style/AppThemeDark"
+            android:exported="false"
+            android:screenOrientation="sensor" />
+'''
+if "com.snapix.nhhlauncher.OnboardingActivity" not in s:
+    s=s.replace(anchor,block+anchor,1)
+if 'android:icon="@drawable/nhh_icon"' not in s:
+    s=s.replace('<application ', '<application android:icon="@drawable/nhh_icon" ', 1)
 p.write_text(s)
 PY
 

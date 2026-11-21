@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import androidx.appcompat.app.AppCompatActivity
 import android.util.Log
 import com.winlator.ControlsEditorActivity
 import com.winlator.XServerDisplayActivity
@@ -57,7 +58,7 @@ object WinlatorRuntime {
     }
 
     suspend fun ensureReady(
-        activity: MainActivity,
+        activity: AppCompatActivity,
         executable: File,
         prefs: SharedPreferences,
         onProgress: (Float, String) -> Unit,

@@ -209,30 +209,62 @@ import sys
 p = Path(sys.argv[1])
 s = p.read_text()
 
-if "isNhhGameMode" not in s:
+# NHH session flag and Chromecast result request.
+if "private boolean nhhSession;" not in s:
+    s = s.replace(
+        "private String screenEffectProfile;",
+        "private String screenEffectProfile;\n    private boolean nhhSession;\n    private static final int NHH_CAST_REQUEST_CODE = 0x4E48;",
+        1
+    )
+if "nhhSession = getIntent().hasExtra" not in s:
+    s = s.replace(
+        "final PreloaderDialog preloaderDialog = new PreloaderDialog(this);",
+        """final PreloaderDialog preloaderDialog = new PreloaderDialog(this);
+        nhhSession = getIntent().hasExtra("nhh_controls_profile_id")
+                || getIntent().getBooleanExtra("nhh_desktop_mode", false);""",
+        1
+    )
+
+# Never show native runtime dialogs in an NHH session.
+s = s.replace(
+    "preloaderDialog.show(R.string.updating_system_files);",
+    "if (!nhhSession) preloaderDialog.show(R.string.updating_system_files);",
+    1
+)
+s = s.replace(
+    "preloaderDialog.show(R.string.starting_up);",
+    "if (!nhhSession) preloaderDialog.show(R.string.starting_up);",
+    1
+)
+
+# Hide the upstream navigation drawer for NHH and keep the display clean.
+if "boolean isNhhSession = getIntent().hasExtra" not in s:
     marker = "NavigationView navigationView = findViewById(R.id.NavigationView);"
-    insert = '''NavigationView navigationView = findViewById(R.id.NavigationView);
-        boolean isNhhGameMode = getIntent().hasExtra("nhh_controls_profile_id")
-                && !getIntent().getBooleanExtra("nhh_desktop_mode", false);
-        if (isNhhGameMode) {
+    insert = """NavigationView navigationView = findViewById(R.id.NavigationView);
+        boolean isNhhSession = getIntent().hasExtra("nhh_controls_profile_id")
+                || getIntent().getBooleanExtra("nhh_desktop_mode", false);
+        if (isNhhSession) {
             navigationView.setVisibility(View.GONE);
             drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
-        }'''
+        }"""
     if marker not in s:
         raise SystemExit("XServer navigation marker not found")
     s = s.replace(marker, insert, 1)
 
-# NHH's Compose launcher owns bootstrap progress; desktop/game sessions still use the native XServer activity.
-s = s.replace('preloaderDialog.show(R.string.starting_up);', '/* NHH launcher owns game bootstrap UI. */', 1)
-
+# Attach the selected real NHH Winlator profile only when touch controls are enabled.
 if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not in s:
-    marker = '''        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));'''
-    replacement = '''        if (getIntent().hasExtra("nhh_controls_profile_id")
+    marker = "        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));"
+    replacement = """        if (getIntent().hasExtra("nhh_controls_profile_id")
                 && !getIntent().getBooleanExtra("nhh_desktop_mode", false)) {
-            int nhhProfileId = getIntent().getIntExtra("nhh_controls_profile_id", com.snapix.nhhlauncher.NhhControllerRuntime.DEFAULT_PROFILE_ID);
-            ControlsProfile profile = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, nhhProfileId);
-            showInputControls(profile);
-            com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession(this, inputControlsView, xServer, profile.id);
+            int nhhProfileId = getIntent().getIntExtra(
+                    "nhh_controls_profile_id",
+                    com.snapix.nhhlauncher.NhhControllerRuntime.DEFAULT_PROFILE_ID
+            );
+            if (nhhProfileId > 0) {
+                ControlsProfile profile = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, nhhProfileId);
+                showInputControls(profile);
+                com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession(this, inputControlsView, xServer, profile.id);
+            }
             if (getIntent().getBooleanExtra("nhh_force_fullscreen", true)) {
                 xServerView.post(() -> {
                     if (!xServerView.getRenderer().isFullscreen()) xServerView.getRenderer().toggleFullscreen();
@@ -240,18 +272,96 @@ if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not i
             }
         }
 
-        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));'''
+        if (isNhhSession) {
+            com.snapix.nhhlauncher.NhhSessionMenu.attach(
+                    this,
+                    rootView,
+                    this::openNhhControlsEditor,
+                    this::openNhhCast,
+                    this::exit
+            );
+        }
+
+        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));"""
     if marker not in s:
         raise SystemExit("XServer setupUI marker not found")
     s = s.replace(marker, replacement, 1)
 
-if "NhhControllerRuntime.onSessionPaused();" not in s:
-    s=s.replace("public void onPause() {", "public void onPause() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.onSessionPaused();", 1)
-if "NhhControllerRuntime.onSessionResumed(this);" not in s:
-    s=s.replace("public void onResume() {", "public void onResume() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.onSessionResumed(this);", 1)
-if "NhhControllerRuntime.detachFromSession();" not in s:
-    s=s.replace("protected void onDestroy() {", "protected void onDestroy() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.detachFromSession();", 1)
+# Launch the Controls Editor and return to the same session with its saved layout.
+if "private void openNhhControlsEditor()" not in s:
+    marker = "    private boolean isGenerateWineprefix() {"
+    methods = """    private void openNhhControlsEditor() {
+        int profileId = getIntent().getIntExtra(
+                "nhh_controls_profile_id",
+                com.snapix.nhhlauncher.NhhControllerRuntime.DEFAULT_PROFILE_ID
+        );
+        if (profileId <= 0) profileId = com.snapix.nhhlauncher.NhhControllerRuntime.DEFAULT_PROFILE_ID;
+        final int selectedProfileId = profileId;
 
+        com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, selectedProfileId);
+        editInputControlsCallback = () -> {
+            ControlsProfile updated = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, selectedProfileId);
+            showInputControls(updated);
+            com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession(this, inputControlsView, xServer, selectedProfileId);
+        };
+
+        Intent intent = new Intent(this, ControlsEditorActivity.class);
+        intent.putExtra("profile_id", selectedProfileId);
+        intent.putExtra("nhh_editor_safe_area", true);
+        startActivityForResult(intent, MainActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE);
+    }
+
+    private void openNhhCast() {
+        startActivityForResult(
+                new Intent(this, com.snapix.nhhlauncher.cast.CastActivity.class),
+                NHH_CAST_REQUEST_CODE
+        );
+    }
+
+"""
+    if marker not in s:
+        raise SystemExit("XServer utility marker not found")
+    s = s.replace(marker, methods + marker, 1)
+
+# Hand the chosen Chromecast to the screen-capture permission trampoline.
+if "requestCode == NHH_CAST_REQUEST_CODE" not in s:
+    marker = "        super.onActivityResult(requestCode, resultCode, data);"
+    insert = """        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == NHH_CAST_REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                Intent projectionIntent = new Intent(
+                        this,
+                        com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity.class
+                );
+                projectionIntent.putExtras(data);
+                startActivity(projectionIntent);
+            }
+            return;
+        }"""
+    if marker not in s:
+        raise SystemExit("XServer onActivityResult marker not found")
+    s = s.replace(marker, insert, 1)
+
+if "NhhControllerRuntime.onSessionPaused();" not in s:
+    s = s.replace(
+        "public void onPause() {",
+        "public void onPause() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.onSessionPaused();",
+        1
+    )
+if "NhhControllerRuntime.onSessionResumed(this);" not in s:
+    s = s.replace(
+        "public void onResume() {",
+        "public void onResume() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.onSessionResumed(this);",
+        1
+    )
+if "NhhControllerRuntime.detachFromSession();" not in s:
+    s = s.replace(
+        "protected void onDestroy() {",
+        "protected void onDestroy() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.detachFromSession();",
+        1
+    )
+
+p.write_text(s)
 PY
 
 # 6. Patch editor/runtime input dispatch and safe-area parity.

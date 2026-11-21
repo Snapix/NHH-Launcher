@@ -276,4 +276,76 @@ p.write_text(s)
 PY
 fi
 
+
+# 7. Make the native Winlator touch overlay the authoritative input path.
+INPUT_CONTROLS_VIEW="$WINLATOR_APP/src/main/java/com/winlator/widget/InputControlsView.java"
+python3 - "$INPUT_CONTROLS_VIEW" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+
+dispatch_marker = '    public void handleInputEvent(Binding binding, boolean isActionDown, float offset) {\n'
+if "NhhControllerRuntime.recordDispatchedEvent" not in s:
+    if dispatch_marker not in s:
+        raise SystemExit("InputControlsView handleInputEvent marker not found")
+    s = s.replace(
+        dispatch_marker,
+        dispatch_marker + '        com.snapix.nhhlauncher.NhhControllerRuntime.recordDispatchedEvent("Binding " + binding + " " + (isActionDown ? "DOWN" : "UP"));\n',
+        1
+    )
+
+old_move = '''                case MotionEvent.ACTION_MOVE: {
+                    for (byte i = 0, count = (byte)event.getPointerCount(); i < count; i++) {
+                        float x = event.getX(i);
+                        float y = event.getY(i);
+                        int movePointerId = event.getPointerId(i);
+
+                        handled = false;
+                        for (ControlElement element : profile.getElements()) {
+                            if (element.handleTouchMove(movePointerId, x, y)) handled = true;
+                        }
+                        if (!handled) touchpadView.onTouchEvent(event);
+                    }
+                    break;
+                }'''
+new_move = '''                case MotionEvent.ACTION_MOVE: {
+                    boolean touchpadHandled = false;
+                    for (int i = 0; i < event.getPointerCount(); i++) {
+                        float x = event.getX(i);
+                        float y = event.getY(i);
+                        int movePointerId = event.getPointerId(i);
+
+                        boolean pointerHandled = false;
+                        for (ControlElement element : profile.getElements()) {
+                            if (element.handleTouchMove(movePointerId, x, y)) pointerHandled = true;
+                        }
+                        if (!pointerHandled) touchpadHandled = true;
+                    }
+                    if (touchpadHandled) touchpadView.onTouchEvent(event);
+                    break;
+                }'''
+if old_move in s:
+    s = s.replace(old_move, new_move, 1)
+
+size_marker = '    @Override\n    public boolean onGenericMotionEvent(MotionEvent event) {'
+if "protected void onSizeChanged(int w, int h, int oldw, int oldh)" not in s:
+    if size_marker not in s:
+        raise SystemExit("InputControlsView onGenericMotionEvent marker not found")
+    size_method = '''    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (profile != null && w > 0 && h > 0) {
+            profile.loadElements(this);
+            invalidate();
+        }
+    }
+
+'''
+    s = s.replace(size_marker, size_method + size_marker, 1)
+
+p.write_text(s)
+PY
+
 echo "NHH preparation complete."
+

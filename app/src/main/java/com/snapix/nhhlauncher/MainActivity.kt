@@ -171,8 +171,8 @@ private fun NhhApp(activity: MainActivity) {
                     isSaving = saving,
                     feedback = settingsFeedback,
                     error = settingsError,
-                    onChange = {
-                        settings = it
+                    onChange = { value ->
+                        settings = value
                         settingsFeedback = null
                         settingsError = null
                     },

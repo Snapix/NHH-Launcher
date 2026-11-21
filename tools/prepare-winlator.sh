@@ -117,6 +117,11 @@ s = s.replace(
     1
 )
 s = s.replace(
+    "final int progress = (int)(((float)totalSize / contentLength) * 100);",
+    "final int progress = (int)(((float)totalSize / contentLength) * 100); NHH_INSTALL_PROGRESS = Math.max(0, Math.min(100, progress));",
+    1
+)
+s = s.replace(
     "activity.runOnUiThread(() -> dialog.setProgress(progress));",
     "if (!nhhHost) activity.runOnUiThread(() -> dialog.setProgress(progress));",
     1

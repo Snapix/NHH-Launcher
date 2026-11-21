@@ -649,8 +649,8 @@ import sys
 p=Path(sys.argv[1])
 s=p.read_text()
 s=s.replace("applicationId 'com.winlator'", "applicationId 'com.noheroshere.snap'")
-s=s.replace("versionCode 33", "versionCode 37")
-s=s.replace('versionName "11.2"', 'versionName "1.0.3"')
+s=s.replace("versionCode 33", "versionCode 38")
+s=s.replace('versionName "11.2"', 'versionName "1.0.4"')
 p.write_text(s)
 PY
 

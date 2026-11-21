@@ -192,7 +192,7 @@ object NhhControllerRuntime {
     }
 
     @JvmStatic
-    fun onViewportChanged(activity: Activity, view: InputControlsView) {
+    fun onViewportChanged(view: InputControlsView) {
         if (attachedView !== view) return
         attachedProfile?.loadElements(view)
         view.invalidate()

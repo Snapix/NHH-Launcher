@@ -1,4 +1,4 @@
-package com.snapix.nhhlauncher
+package com.noheroshere.snap
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState

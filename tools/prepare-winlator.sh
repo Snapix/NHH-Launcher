@@ -216,6 +216,30 @@ s = p.read_text().replace('"com.winlator.FileProvider"', '"com.noheroshere.snap.
 p.write_text(s)
 PY
 
+# Rename the native background-session notification and app strings for NHH.
+FOREGROUND_SERVICE="$WINLATOR_APP/src/main/java/com/winlator/services/ForegroundService.java"
+python3 - "$FOREGROUND_SERVICE" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace('"Winlator",\n                XServerDisplayActivity.class', '"No Heroes Here",\n                XServerDisplayActivity.class')
+s = s.replace('return "Winlator is running in the background";', 'return "No Heroes Here is running in the background";')
+p.write_text(s)
+PY
+
+STRINGS="$WINLATOR_APP/src/main/res/values/strings.xml"
+python3 - "$STRINGS" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace('<string name="app_name">Winlator</string>', '<string name="app_name">No Heroes Here</string>')
+s = s.replace('Keeps Winlator running in the background so a wine session is not interrupted by Android\\'s background process management.', 'Keeps No Heroes Here running in the background so the game session is not interrupted by Android\\'s background process management.')
+s = s.replace('<string name="fgs_notification_content_else">Winlator is running in the background</string>', '<string name="fgs_notification_content_else">No Heroes Here is running in the background</string>')
+p.write_text(s)
+PY
+
 # 5. Patch the display session for NHH game mode and keep native Winlator desktop mode intact.
 XSERVER_DISPLAY="$WINLATOR_APP/src/main/java/com/winlator/XServerDisplayActivity.java"
 python3 - "$XSERVER_DISPLAY" <<'PY'

@@ -318,5 +318,27 @@ if "protected void onSizeChanged(int w, int h, int oldw, int oldh)" not in s:
 p.write_text(s)
 PY
 
+
+# Keep the NHH overlay aligned after rotation, split-screen, and window-size changes.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+if "NhhControllerRuntime.onViewportChanged(this, inputControlsView)" not in s:
+    idx = s.rfind("\n}")
+    method = '''
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (inputControlsView != null && getIntent().hasExtra("nhh_controls_profile_id")) {
+            com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(this, inputControlsView);
+        }
+    }
+'''
+    s = s[:idx] + method + s[idx:]
+p.write_text(s)
+PY
+
 echo "NHH preparation complete."
 

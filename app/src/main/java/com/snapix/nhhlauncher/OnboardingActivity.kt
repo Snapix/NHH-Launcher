@@ -1,5 +1,7 @@
 package com.snapix.nhhlauncher
 
+import com.winlator.R
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri

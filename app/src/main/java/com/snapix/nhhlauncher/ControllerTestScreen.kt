@@ -1,188 +1,74 @@
-package com.snapix.nhhlauncher 
-import androidx.compose.foundation.BorderStroke 
-import androidx.compose.foundation.Canvas 
-import androidx.compose.foundation.background 
-import androidx.compose.foundation.gestures.awaitEachGesture 
-import androidx.compose.foundation.gestures.awaitFirstDown 
-import androidx.compose.foundation.gestures.drag 
-import androidx.compose.foundation.layout.* 
-import androidx.compose.foundation.rememberScrollState 
-import androidx.compose.foundation.shape.CircleShape 
-import androidx.compose.foundation.shape.RoundedCornerShape 
-import androidx.compose.foundation.verticalScroll 
-import androidx.compose.material.icons.Icons 
-import androidx.compose.material.icons.automirrored.filled.ArrowBack 
-import androidx.compose.material.icons.filled.CheckCircle 
-import androidx.compose.material.icons.filled.Refresh 
-import androidx.compose.material.icons.filled.SportsEsports 
-import androidx.compose.material3.* 
-import androidx.compose.runtime.* 
-import androidx.compose.ui.Alignment 
-import androidx.compose.ui.Modifier 
-import androidx.compose.ui.draw.clip 
-import androidx.compose.ui.geometry.Offset 
-import androidx.compose.ui.graphics.Color 
-import androidx.compose.ui.graphics.drawscope.Stroke 
-import androidx.compose.ui.input.pointer.PointerEventType 
-import androidx.compose.ui.input.pointer.pointerInput 
-import androidx.compose.ui.text.font.FontFamily 
-import androidx.compose.ui.text.font.FontWeight 
-import androidx.compose.ui.unit.dp 
-import androidx.compose.ui.unit.sp 
-import java.util.Locale 
-import kotlin.math.hypot 
-data class ButtonTestRecord( 
-val pressed: Boolean = false, 
-val seenDown: Boolean = false, 
-val seenUp: Boolean = false ) @OptIn(ExperimentalMaterial3Api::class) @Composable 
-internal 
-fun ControllerTestScreen( onBack: () -> Unit, onResetLayout: () -> Unit ) { 
-val buttonNames = remember { listOf("A", "B", "X", "Y", "LB", "RB", "LT", "RT", "MENU", "UP", "DOWN", "LEFT", "RIGHT") } 
-var records by remember { mutableStateOf(buttonNames.associateWith { ButtonTestRecord() }) } 
-var lx by remember { mutableFloatStateOf(0f) } 
-var ly by remember { mutableFloatStateOf(0f) } 
-var stickSeenMove by remember { mutableStateOf(false) } 
-var lastEventLog by remember { mutableStateOf("Touch any control below to test DOWN / UP and analog axes.") } 
-var diag by remember { mutableStateOf(NhhControllerRuntime.snapshot) } 
-DisposableEffect(Unit) { 
-val listener: (NhhControllerRuntime.DiagnosticsSnapshot) -> Unit = { diag = it } NhhControllerRuntime.addDiagnosticsListener(listener) onDispose { NhhControllerRuntime.removeDiagnosticsListener(listener) } } 
-fun onButtonChange(name: String, isDown: Boolean) { 
-val current = records[name] ?: ButtonTestRecord() records = records + (name to current.copy( pressed = isDown, seenDown = current.seenDown || isDown, seenUp = current.seenUp || !isDown )) lastEventLog = 
-if (isDown) "$name -> DOWN ✓" 
-else "$name -> UP ✓" } 
-Scaffold( topBar = { TopAppBar( title = { Column { 
-Text("Controller Test Mode", fontWeight = FontWeight.Bold) 
-Text( "Touch Detection & XInput Pipeline Verifier", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant ) } }, navigationIcon = { Icon
-Button(onClick = onBack) { 
-Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }, actions = { Icon
-Button(onClick = { records = buttonNames.associateWith { ButtonTestRecord() } lx = 0f ly = 0f stickSeenMove = false lastEventLog = "Counters cleared." }) { 
-Icon(Icons.Default.Refresh, contentDescription = "Clear Test") } }, colors = TopAppBarDefaults.topAppBarColors( containerColor = MaterialTheme.colorScheme.background ) ) } ) { innerPadding -> 
-Column( modifier = Modifier .fillMaxSize() .padding(innerPadding) .verticalScroll(rememberScrollState()) .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp) ) { // Live Telemetry Dashboard 
-ElevatedCard( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.elevatedCardColors( containerColor = MaterialTheme.colorScheme.surfaceContainerHigh ) ) { 
-Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { 
-Row(verticalAlignment = Alignment.CenterVertically) { 
-Icon( Icons.Default.SportsEsports, contentDescription = null, tint = MaterialTheme.colorScheme.primary ) 
-Spacer(Modifier.width(8.dp)) 
-Text( "LIVE STATE MONITOR", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold ) 
-Spacer(Modifier.weight(1f)) AssistChip( onClick = {}, label = { 
-Text(diag.preferredInputApi, fontSize = 11.sp) } ) } // Face buttons row 
-Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { StatusDot("A", records["A"]!!) StatusDot("B", records["B"]!!) StatusDot("X", records["X"]!!) StatusDot("Y", records["Y"]!!) StatusDot("MENU", records["MENU"]!!) } // Shoulders & Triggers 
-Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { StatusDot("LB", records["LB"]!!) StatusDot("RB", records["RB"]!!) TriggerBar("LT", 
-if (records["LT"]!!.pressed) 1f 
-else 0f) TriggerBar("RT", 
-if (records["RT"]!!.pressed) 1f 
-else 0f) } // D-Pad & Left Stick readouts 
-Row( Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically ) { 
-Text( text = String.format( Locale.US, "LX: %+.2f LY: %+.2f %s", lx, ly, 
-if (stickSeenMove) "✓" 
-else "" ), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary ) 
-Text( text = "D-PAD: " + listOf("UP", "DOWN", "LEFT", "RIGHT") .filter { records[it]?.pressed == true } .joinToString("+").ifEmpty { "CENTER" }, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant ) } 
-Surface( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest ) { 
-Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { 
-Text( text = lastEventLog, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary ) 
-Text( text = "Runtime: ${diag.state.name} | Profile #${diag.profileId} | Dispatched: ${diag.dispatchCount} (${diag.lastDispatchEvent})", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant ) } } } } // Interactive Multi-Touch Pad matching the exact NHH Xbox Layout 
-ElevatedCard( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.elevatedCardColors( containerColor = MaterialTheme.colorScheme.surfaceContainer ) ) { 
-Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { 
-Text( "INTERACTIVE NHH XBOX PAD (MULTI-TOUCH)", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold ) // Top Shoulders / Triggers Row 
-Row( Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp) ) { TestPad
-Button("LB", "Switch", records["LB"]!!, Modifier.weight(1f)) { onButtonChange("LB", it) } TestPad
-Button("LT", "Switch", records["LT"]!!, Modifier.weight(1f)) { onButtonChange("LT", it) } TestPad
-Button("RB", "Cannon", records["RB"]!!, Modifier.weight(1f)) { onButtonChange("RB", it) } TestPad
-Button("RT", "Fire", records["RT"]!!, Modifier.weight(1f)) { onButtonChange("RT", it) } } // Middle: Left Stick + D-Pad | Face Buttons Diamond 
-Row( Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically ) { // Left Stick interactive touch pad 
-Column(horizontalAlignment = Alignment.CenterHorizontally) { AnalogStickPad( lx = lx, ly = ly, onStickChange = { x, y -> lx = x ly = y 
-if (hypot(x, y) > 0.1f) stickSeenMove = true lastEventLog = String.format(Locale.US, "LEFT STICK -> LX: %+.2f LY: %+.2f", x, y) } ) 
-Spacer(Modifier.height(6.dp)) 
-Text("Left Stick (Move)", style = MaterialTheme.typography.labelSmall) } // Xbox Face Diamond (Y / X / B / A) 
-Column( horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp) ) { TestPadCircle("Y", "Dash", records["Y"]!!) { onButtonChange("Y", it) } 
-Row(horizontalArrangement = Arrangement.spacedBy(34.dp)) { TestPadCircle("X", "Work", records["X"]!!) { onButtonChange("X", it) } TestPadCircle("B", "Throw", records["B"]!!) { onButtonChange("B", it) } } TestPadCircle("A", "Jump", records["A"]!!) { onButtonChange("A", it) } } } // D-Pad + Menu Row 
-Row( Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically ) { TestPad
-Button("UP", "D-Pad", records["UP"]!!, Modifier.weight(1f)) { onButtonChange("UP", it) } TestPad
-Button("DOWN", "D-Pad", records["DOWN"]!!, Modifier.weight(1f)) { onButtonChange("DOWN", it) } TestPad
-Button("LEFT", "D-Pad", records["LEFT"]!!, Modifier.weight(1f)) { onButtonChange("LEFT", it) } TestPad
-Button("RIGHT", "D-Pad", records["RIGHT"]!!, Modifier.weight(1f)) { onButtonChange("RIGHT", it) } } TestPad
-Button( label = "MENU", sublabel = "Pause / Settings", record = records["MENU"]!!, modifier = Modifier.fillMaxWidth() ) { onButtonChange("MENU", it) } } } // Verification Summary Checklist 
-ElevatedCard( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp) ) { 
-Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { 
-Text( "DOWN / UP VERIFICATION", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold ) buttonNames.chunked(3).forEach { rowItems -> 
-Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { rowItems.forEach { name -> 
-val r = records[name]!! 
-val ok = r.seenDown && r.seenUp 
-Surface( modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), color = 
-if (ok) Color(0xFF1D4D2B) 
-else MaterialTheme.colorScheme.surfaceContainerLowest ) { 
-Row( Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically ) { 
-Text( "$name: ${if (r.seenDown) "D✓" else "D·"} ${if (r.seenUp) "U✓" else "U·"}", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = 
-if (ok) Color(0xFFB7F5C4) 
-else MaterialTheme.colorScheme.onSurfaceVariant ) } } } } } 
-Spacer(Modifier.height(4.dp)) 
-FilledTonalButton( onClick = onResetLayout, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp) ) { 
-Icon(Icons.Default.CheckCircle, contentDescription = null) 
-Spacer(Modifier.width(8.dp)) 
-Text("Restore Default NHH Xbox Layout") } } } } } } @Composable 
-private fun StatusDot(label: String, record: ButtonTestRecord) { 
-val active = record.pressed 
-Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { 
-Text(label, fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Bold) 
-Text( text = 
-if (active) "●" 
-else "○", fontSize = 16.sp, color = 
-if (active) Color(0xFF5CE67D) 
-else MaterialTheme.colorScheme.onSurfaceVariant ) } } @Composable 
-private fun TriggerBar(label: String, value: Float) { 
-Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { 
-Text(label, fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Bold) 
-Box( Modifier .width(36.dp) .height(12.dp) .clip(RoundedCornerShape(6.dp)) .background(MaterialTheme.colorScheme.surfaceContainerLowest) ) { 
-Box( Modifier .fillMaxHeight() .fillMaxWidth(value.coerceIn(0f, 1f)) .background(MaterialTheme.colorScheme.primary) ) } } } @Composable 
-private fun TestPad
-Button( label: String, sublabel: String, record: ButtonTestRecord, modifier: Modifier = Modifier, onPressedChange: (Boolean) -> Unit ) { 
-Surface( modifier = modifier .height(50.dp) .pointerInput(label) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false) onPressedChange(true) do { 
-val event = awaitPointerEvent() 
-val anyPressed = event.changes.any { it.pressed } } 
-while (anyPressed) onPressedChange(false) } }, shape = RoundedCornerShape(16.dp), color = 
-if (record.pressed) MaterialTheme.colorScheme.primary 
-else MaterialTheme.colorScheme.surfaceContainerHigh, border = BorderStroke( 1.5.dp, 
-if (record.pressed) Color.White 
-else MaterialTheme.colorScheme.outlineVariant ) ) { 
-Column( Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally ) { 
-Text( label, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = 
-if (record.pressed) MaterialTheme.colorScheme.onPrimary 
-else MaterialTheme.colorScheme.onSurface ) 
-Text( sublabel, fontSize = 10.sp, color = 
-if (record.pressed) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f) 
-else MaterialTheme.colorScheme.onSurfaceVariant ) } } } @Composable 
-private fun TestPadCircle( label: String, sublabel: String, record: ButtonTestRecord, onPressedChange: (Boolean) -> Unit ) { 
-Surface( modifier = Modifier .size(56.dp) .pointerInput(label) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false) onPressedChange(true) do { 
-val event = awaitPointerEvent() 
-val anyPressed = event.changes.any { it.pressed } } 
-while (anyPressed) onPressedChange(false) } }, shape = CircleShape, color = 
-if (record.pressed) MaterialTheme.colorScheme.primary 
-else MaterialTheme.colorScheme.surfaceContainerHigh, border = BorderStroke( 1.5.dp, 
-if (record.pressed) Color.White 
-else MaterialTheme.colorScheme.outlineVariant ) ) { 
-Column( Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally ) { 
-Text( label, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = 
-if (record.pressed) MaterialTheme.colorScheme.onPrimary 
-else MaterialTheme.colorScheme.onSurface ) 
-Text( sublabel, fontSize = 9.sp, color = 
-if (record.pressed) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f) 
-else MaterialTheme.colorScheme.onSurfaceVariant ) } } } @Composable 
-private fun AnalogStickPad( lx: Float, ly: Float, onStickChange: (Float, Float) -> Unit ) { 
-val primary = MaterialTheme.colorScheme.primary 
-val outline = MaterialTheme.colorScheme.outlineVariant 
-Box( modifier = Modifier .size(132.dp) .clip(CircleShape) .background(MaterialTheme.colorScheme.surfaceContainerHigh) .pointerInput(Unit) { awaitEachGesture { 
-val down = awaitFirstDown(requireUnconsumed = false) 
-val radius = size.width / 2f 
-val center = Offset(radius, radius) 
-fun emit(pos: Offset) { 
-val dx = (pos.x - center.x) / radius 
-val dy = (pos.y - center.y) / radius 
-val dist = hypot(dx, dy) 
-val clampedX = 
-if (dist > 1f) dx / dist 
-else dx 
-val clampedY = 
-if (dist > 1f) dy / dist 
-else dy onStickChange(clampedX.coerceIn(-1f, 1f), clampedY.coerceIn(-1f, 1f)) } emit(down.position) drag(down.id) { change -> change.consume() emit(change.position) } onStickChange(0f, 0f) } } ) { Canvas(Modifier.fillMaxSize()) { 
-val r = size.minDimension / 2f drawCircle(color = outline, radius = r - 2.dp.toPx(), style = Stroke(width = 2.dp.toPx())) drawLine(outline.copy(alpha = 0.35f), Offset(r, 8f), Offset(r, size.height - 8f), strokeWidth = 1.dp.toPx()) drawLine(outline.copy(alpha = 0.35f), Offset(8f, r), Offset(size.width - 8f, r), strokeWidth = 1.dp.toPx()) 
-val knobCenter = Offset(r + lx * (r * 0.62f), r + ly * (r * 0.62f)) drawCircle(color = primary, radius = r * 0.30f, center = knobCenter) } } }
+package com.snapix.nhhlauncher
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+
+@Composable
+internal fun ControllerTestScreen(
+    onBack: () -> Unit,
+    onResetLayout: () -> Unit
+) {
+    var snapshot by remember { mutableStateOf(NhhControllerRuntime.snapshot) }
+
+    DisposableEffect(Unit) {
+        val listener: (NhhControllerRuntime.DiagnosticsSnapshot) -> Unit = { snapshot = it }
+        NhhControllerRuntime.addDiagnosticsListener(listener)
+        onDispose { NhhControllerRuntime.removeDiagnosticsListener(listener) }
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+            }
+            Column {
+                Text("Controller Test", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Native Winlator input pipeline", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("LIVE PIPELINE", fontWeight = FontWeight.Bold)
+                Text("State: " + snapshot.state)
+                Text("Profile: #" + snapshot.profileId)
+                Text("Elements: " + snapshot.elementCount)
+                Text("Virtual gamepad: " + snapshot.isVirtualGamepad)
+                Text("Touch controls: " + snapshot.touchscreenControlsEnabled)
+                Text("WinHandler: " + snapshot.winHandlerReady)
+                Text("Dispatches: " + snapshot.dispatchCount)
+                Text("Last event: " + snapshot.lastDispatchEvent)
+                Text("Viewport: " + snapshot.viewportWidth + " x " + snapshot.viewportHeight)
+            }
+        }
+
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("VERIFY", fontWeight = FontWeight.Bold)
+                Text("Launch a game and press every on-screen control.")
+                Text("Hold the left stick while pressing a face button.")
+                Text("Use two or more fingers at the same time.")
+                Text("Dispatches are reported from Winlator's InputControlsView; this screen does not fake input.")
+            }
+        }
+
+        Button(onClick = onResetLayout, Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Refresh, null)
+            Spacer(Modifier.width(8.dp))
+            Text("RESTORE NHH XBOX LAYOUT")
+        }
+    }
+}

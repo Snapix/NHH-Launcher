@@ -510,7 +510,7 @@ private suspend fun importGameZip(
             if (executables.isEmpty()) {
                 throw IllegalArgumentException("No .exe file was found in the ZIP.")
             }
-            onNeedsSelection(executables)
+            withContext(Dispatchers.Main.immediate) { onNeedsSelection(executables) }
             withContext(Dispatchers.Main.immediate) {
                 onProgress(SetupStage.SELECT_EXE, 1f, "Choose the game executable")
             }

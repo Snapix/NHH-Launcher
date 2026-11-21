@@ -58,7 +58,7 @@ object WinlatorRuntime {
         val latest = RootFSInstaller.LATEST_VERSION.toInt()
 
         if (!rootFs.isValid() || rootFs.getVersion() < latest) {
-            onProgress(0.02f, "Installing Winlator system files…")
+            onProgress(0.02f, "Installing required system components…")
             RootFSInstaller.installIfNeeded(activity)
 
             var waited = 0L
@@ -70,7 +70,7 @@ object WinlatorRuntime {
 
                 if (rootFs.isValid() && rootFs.getVersion() >= latest) break
                 if (progress < 0) throw IllegalStateException("Could not install the required system components.")
-                if (waited > 15 * 60 * 1000) throw IllegalStateException("Winlator system-file installation timed out.")
+                if (waited > 15 * 60 * 1000) throw IllegalStateException("System setup timed out.")
 
                 onProgress(
                     if (progress > 0) (progress / 100f).coerceIn(0.02f, 0.38f) else 0.02f,

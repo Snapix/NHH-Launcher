@@ -451,7 +451,7 @@ import sys
 p = Path(sys.argv[1])
 s = p.read_text()
 
-old_map = """updateCursorVisibility();
+old_map = """xServerView.getRenderer().setCursorVisible(true);
                     preloaderDialog.closeOnUiThread();
                     flags[0] = true;""";
 new_map = """updateCursorVisibility();

@@ -1,11 +1,60 @@
-package com.snapix.nhhlauncher import androidx.compose.foundation.layout.* import androidx.compose.foundation.rememberScrollState import androidx.compose.foundation.shape.RoundedCornerShape import androidx.compose.foundation.verticalScroll import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.filled.Build import androidx.compose.material.icons.filled.DisplaySettings import androidx.compose.material.icons.filled.Memory import androidx.compose.material.icons.filled.RestartAlt import androidx.compose.material.icons.filled.Save import androidx.compose.material.icons.filled.Share import androidx.compose.material.icons.filled.SportsEsports import androidx.compose.material.icons.filled.Tune import androidx.compose.material.icons.filled.VolumeUp import androidx.compose.material3.* import androidx.compose.runtime.* import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.graphics.vector.ImageVector import androidx.compose.ui.text.font.FontWeight import androidx.compose.ui.unit.dp import kotlin.math.roundToInt @OptIn(ExperimentalMaterial3Api::class) @Composable internal fun LauncherSettingsScreen( settings: LauncherRuntimeSettings, isSaving: Boolean, feedback: String?, error: String?, onChange: (LauncherRuntimeSettings) -> Unit, onSave: () -> Unit, onBack: () -> Unit, onReimport: () -> Unit, onResetControls: () -> Unit, onOpenControllerTest: () -> Unit, onShareReport: () -> Unit ) { Scaffold( topBar = { LargeTopAppBar( title = { Column { Text("Runtime Settings", fontWeight = FontWeight.ExtraBold) Text( "Graphics, XInput Controller & Container Tuning", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant ) } }, navigationIcon = { Icon
-Button(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }, colors = TopAppBarDefaults.largeTopAppBarColors( containerColor = MaterialTheme.colorScheme.background ) ) }, bottomBar = { Surface( tonalElevation = 6.dp, color = MaterialTheme.colorScheme.surfaceContainer ) { Column( Modifier .fillMaxWidth() .navigationBarsPadding() .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp) ) { if (!feedback.isNullOrBlank()) { Text( feedback, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary ) } if (!error.isNullOrBlank()) { Text( error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error ) } Button( onClick = onSave, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(28.dp) ) { Icon(Icons.Default.Save, contentDescription = null) Spacer(Modifier.width(10.dp)) Text( if (isSaving) "SAVING CONFIGURATION…" else "APPLY & SAVE SETTINGS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold ) } } } } ) { innerPadding -> Column( modifier = Modifier .fillMaxSize() .padding(innerPadding) .verticalScroll(rememberScrollState()) .padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp) ) { // 1. Controller & XInput Section ExpressiveSettings
+package com.snapix.nhhlauncher 
+import androidx.compose.foundation.layout.* 
+import androidx.compose.foundation.rememberScrollState 
+import androidx.compose.foundation.shape.RoundedCornerShape 
+import androidx.compose.foundation.verticalScroll 
+import androidx.compose.material.icons.Icons 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack 
+import androidx.compose.material.icons.filled.Build 
+import androidx.compose.material.icons.filled.DisplaySettings 
+import androidx.compose.material.icons.filled.Memory 
+import androidx.compose.material.icons.filled.RestartAlt 
+import androidx.compose.material.icons.filled.Save 
+import androidx.compose.material.icons.filled.Share 
+import androidx.compose.material.icons.filled.SportsEsports 
+import androidx.compose.material.icons.filled.Tune 
+import androidx.compose.material.icons.filled.VolumeUp 
+import androidx.compose.material3.* 
+import androidx.compose.runtime.* 
+import androidx.compose.ui.Alignment 
+import androidx.compose.ui.Modifier 
+import androidx.compose.ui.graphics.vector.ImageVector 
+import androidx.compose.ui.text.font.FontWeight 
+import androidx.compose.ui.unit.dp 
+import kotlin.math.roundToInt @OptIn(ExperimentalMaterial3Api::class) @Composable 
+internal 
+fun LauncherSettingsScreen( settings: LauncherRuntimeSettings, isSaving: Boolean, feedback: String?, error: String?, onChange: (LauncherRuntimeSettings) -> Unit, onSave: () -> Unit, onBack: () -> Unit, onReimport: () -> Unit, onResetControls: () -> Unit, onOpenControllerTest: () -> Unit, onShareReport: () -> Unit ) { 
+Scaffold( topBar = { LargeTopAppBar( title = { Column { 
+Text("Runtime Settings", fontWeight = FontWeight.ExtraBold) 
+Text( "Graphics, XInput Controller & Container Tuning", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant ) } }, navigationIcon = { Icon
+Button(onClick = onBack) { 
+Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }, colors = TopAppBarDefaults.largeTopAppBarColors( containerColor = MaterialTheme.colorScheme.background ) ) }, bottomBar = { 
+Surface( tonalElevation = 6.dp, color = MaterialTheme.colorScheme.surfaceContainer ) { 
+Column( Modifier .fillMaxWidth() .navigationBarsPadding() .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp) ) { 
+if (!feedback.isNullOrBlank()) { 
+Text( feedback, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary ) } 
+if (!error.isNullOrBlank()) { 
+Text( error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error ) } 
+Button( onClick = onSave, enabled = !isSaving, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(28.dp) ) { 
+Icon(Icons.Default.Save, contentDescription = null) 
+Spacer(Modifier.width(10.dp)) 
+Text( 
+if (isSaving) "SAVING CONFIGURATION…" 
+else "APPLY & SAVE SETTINGS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold ) } } } } ) { innerPadding -> 
+Column( modifier = Modifier .fillMaxSize() .padding(innerPadding) .verticalScroll(rememberScrollState()) .padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp) ) { // 1. Controller & XInput Section ExpressiveSettings
 Card("Xbox Controller & Input", Icons.Default.SportsEsports) { ExpressiveSwitch
 Row( title = "On-Screen Xbox Controls", subtitle = "Pre-loaded NHH layout (Left Stick, D-Pad, A/B/X/Y, LB/LT, RB/RT, Menu)", checked = settings.onScreenControls ) { onChange(settings.copy(onScreenControls = it)) } SegmentedChoice
 Row( label = "Controller Input API", selected = settings.preferredInputApi, options = listOf( "XINPUT" to "XInput", "BOTH" to "Auto", "DIRECTINPUT" to "DInput" ) ) { onChange(settings.copy(preferredInputApi = it)) } ExpressiveSlider
 Row( label = "Overlay Opacity", valueText = "${(settings.overlayOpacity * 100).roundToInt()}%", value = settings.overlayOpacity, range = 0.20f..1.0f ) { onChange(settings.copy(overlayOpacity = it)) } ExpressiveSlider
 Row( label = "Button Scale", valueText = "${(settings.controlScale * 100).roundToInt()}%", value = settings.controlScale, range = 0.75f..1.30f ) { onChange(settings.copy(controlScale = it)) } ExpressiveSlider
-Row( label = "Left Stick Deadzone", valueText = "${(settings.stickDeadzone * 100).roundToInt()}%", value = settings.stickDeadzone, range = 0.04f..0.30f ) { onChange(settings.copy(stickDeadzone = it)) } Row( Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp) ) { FilledTonalButton( onClick = onOpenControllerTest, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp) ) { Text("Test Controller") } OutlinedButton( onClick = onResetControls, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp) ) { Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp)) Spacer(Modifier.width(4.dp)) Text("Reset Layout") } } } // 2. Display Section ExpressiveSettings
+Row( label = "Left Stick Deadzone", valueText = "${(settings.stickDeadzone * 100).roundToInt()}%", value = settings.stickDeadzone, range = 0.04f..0.30f ) { onChange(settings.copy(stickDeadzone = it)) } 
+Row( Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp) ) { 
+FilledTonalButton( onClick = onOpenControllerTest, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp) ) { 
+Text("Test Controller") } 
+OutlinedButton( onClick = onResetControls, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp) ) { 
+Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp)) 
+Spacer(Modifier.width(4.dp)) 
+Text("Reset Layout") } } } // 2. Display Section ExpressiveSettings
 Card("Display & Viewport", Icons.Default.DisplaySettings) { SegmentedChoice
 Row( label = "Container Resolution", selected = settings.resolution, options = listOf( "960x540" to "540p", "1280x720" to "720p", "1600x900" to "900p", "1920x1080" to "1080p" ) ) { onChange(settings.copy(resolution = it)) } ExpressiveSwitch
 Row( title = "Force Fullscreen", subtitle = "Scale game viewport cleanly to screen aspect ratio", checked = settings.forceFullscreen ) { onChange(settings.copy(forceFullscreen = it)) } ExpressiveSwitch
@@ -17,10 +66,54 @@ Row( label = "DirectX Wrapper", selected = settings.dxWrapper, options = listOf(
 Card("Performance & Audio", Icons.Default.Memory) { DropdownChoiceField( label = "Box64 Preset", selected = settings.box64Preset, options = listOf( "STABILITY" to "Stability (Recommended for Unity)", "CONSERVATIVE" to "Conservative", "INTERMEDIATE" to "Intermediate", "PERFORMANCE" to "Performance" ) ) { onChange(settings.copy(box64Preset = it)) } ExpressiveSwitch
 Row( title = "Wine ESYNC", subtitle = "Reduces thread synchronization overhead", checked = settings.wineEsync ) { onChange(settings.copy(wineEsync = it)) } SegmentedChoice
 Row( label = "Audio Driver", selected = settings.audioDriver, options = listOf( "alsa" to "ALSA", "pulseaudio" to "PulseAudio" ) ) { onChange(settings.copy(audioDriver = it)) } } // 5. Maintenance & Diagnostics ExpressiveSettings
-Card("Files & Diagnostics", Icons.Default.Build) { Text( "Need extra drivers, Mono, or VC++? Use Enter Desktop on the Home screen.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant ) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { OutlinedButton( onClick = onReimport, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp) ) { Text("Re-import ZIP") } FilledTonalButton( onClick = onShareReport, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp) ) { Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp)) Spacer(Modifier.width(6.dp)) Text("Share Log") } } } Spacer(Modifier.height(12.dp)) } } } @Composable private fun ExpressiveSettings
-Card( title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit ) { ElevatedCard( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.elevatedCardColors( containerColor = MaterialTheme.colorScheme.surfaceContainer ) ) { Column( Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp) ) { Row(verticalAlignment = Alignment.CenterVertically) { Surface( shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primaryContainer ) { Icon( icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.padding(8.dp).size(20.dp) ) } Spacer(Modifier.width(12.dp)) Text( title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold ) } content() } } } @OptIn(ExperimentalMaterial3Api::class) @Composable private fun SegmentedChoice
-Row( label: String, selected: String, options: List<Pair<String, String>>, onSelected: (String) -> Unit ) { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text( label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant ) SingleChoiceSegmentedButton
+Card("Files & Diagnostics", Icons.Default.Build) { 
+Text( "Need extra drivers, Mono, or VC++? Use Enter Desktop on the Home screen.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant ) 
+Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { 
+OutlinedButton( onClick = onReimport, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp) ) { 
+Text("Re-import ZIP") } 
+FilledTonalButton( onClick = onShareReport, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp) ) { 
+Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp)) 
+Spacer(Modifier.width(6.dp)) 
+Text("Share Log") } } } 
+Spacer(Modifier.height(12.dp)) } } } @Composable 
+private fun ExpressiveSettings
+Card( title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit ) { 
+ElevatedCard( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.elevatedCardColors( containerColor = MaterialTheme.colorScheme.surfaceContainer ) ) { 
+Column( Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp) ) { 
+Row(verticalAlignment = Alignment.CenterVertically) { 
+Surface( shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primaryContainer ) { 
+Icon( icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.padding(8.dp).size(20.dp) ) } 
+Spacer(Modifier.width(12.dp)) 
+Text( title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold ) } content() } } } @OptIn(ExperimentalMaterial3Api::class) @Composable 
+private fun SegmentedChoice
+Row( label: String, selected: String, options: List<Pair<String, String>>, onSelected: (String) -> Unit ) { 
+Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { 
+Text( label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant ) SingleChoiceSegmentedButton
 Row(modifier = Modifier.fillMaxWidth()) { options.forEachIndexed { index, (value, display) -> Segmented
-Button( selected = selected == value, onClick = { onSelected(value) }, shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size) ) { Text(display, maxLines = 1) } } } } } @Composable private fun DropdownChoiceField( label: String, selected: String, options: List<Pair<String, String>>, onSelected: (String) -> Unit ) { var expanded by remember { mutableStateOf(false) } val display = options.firstOrNull { it.first == selected }?.second ?: selected Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text( label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant ) Box { OutlinedButton( onClick = { expanded = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp) ) { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(display, Modifier.weight(1f)) Text("▾", color = MaterialTheme.colorScheme.primary) } } DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) { options.forEach { (value, text) -> DropdownMenuItem( text = { Text(text) }, onClick = { expanded = false onSelected(value) } ) } } } } } @Composable private fun ExpressiveSwitch
-Row( title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit ) { Row( Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically ) { Column(Modifier.weight(1f).padding(end = 12.dp)) { Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium) Text( subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant ) } Switch(checked = checked, onCheckedChange = onCheckedChange) } } @Composable private fun ExpressiveSlider
-Row( label: String, valueText: String, value: Float, range: ClosedFloatingPointRange<Float>, onValueChange: (Float) -> Unit ) { Column { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f)) Text( valueText, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold ) } Slider( value = value.coerceIn(range.start, range.endInclusive), onValueChange = onValueChange, valueRange = range ) } }
+Button( selected = selected == value, onClick = { onSelected(value) }, shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size) ) { 
+Text(display, maxLines = 1) } } } } } @Composable 
+private fun DropdownChoiceField( label: String, selected: String, options: List<Pair<String, String>>, onSelected: (String) -> Unit ) { 
+var expanded by remember { mutableStateOf(false) } 
+val display = options.firstOrNull { it.first == selected }?.second ?: selected 
+Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { 
+Text( label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant ) Box { 
+OutlinedButton( onClick = { expanded = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp) ) { 
+Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { 
+Text(display, Modifier.weight(1f)) 
+Text("▾", color = MaterialTheme.colorScheme.primary) } } 
+DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) { options.forEach { (value, text) -> 
+DropdownMenuItem( text = { 
+Text(text) }, onClick = { expanded = false onSelected(value) } ) } } } } } @Composable 
+private fun ExpressiveSwitch
+Row( title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit ) { 
+Row( Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically ) { 
+Column(Modifier.weight(1f).padding(end = 12.dp)) { 
+Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium) 
+Text( subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant ) } 
+Switch(checked = checked, onCheckedChange = onCheckedChange) } } @Composable 
+private fun ExpressiveSlider
+Row( label: String, valueText: String, value: Float, range: ClosedFloatingPointRange<Float>, onValueChange: (Float) -> Unit ) { Column { 
+Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { 
+Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f)) 
+Text( valueText, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold ) } 
+Slider( value = value.coerceIn(range.start, range.endInclusive), onValueChange = onValueChange, valueRange = range ) } }

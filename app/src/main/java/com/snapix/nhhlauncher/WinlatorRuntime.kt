@@ -37,18 +37,12 @@ val overlayOpacity: Float = 0.55f,
 val controlScale: Float = 1.0f, 
 val stickDeadzone: Float = 0.12f ) 
 object WinlatorRuntime { 
-private const 
-val PREF_CONTAINER_ID = "winlator_container_id" 
-private const 
-val PREF_GAME_PATH = "winlator_game_path" 
-private const 
-val PREF_CONTROLS_PROFILE = "nhh_controls_profile_id" 
-private const 
-val PREF_FORCE_FULLSCREEN = "nhh_force_fullscreen" 
-private const 
-val CONTAINER_NAME = "NHH" 
-private const 
-val GAME_DRIVE = "G" 
+private const val PREF_CONTAINER_ID = "winlator_container_id" 
+private const val PREF_GAME_PATH = "winlator_game_path" 
+private const val PREF_CONTROLS_PROFILE = "nhh_controls_profile_id" 
+private const val PREF_FORCE_FULLSCREEN = "nhh_force_fullscreen" 
+private const val CONTAINER_NAME = "NHH" 
+private const val GAME_DRIVE = "G" 
 private val rootfsVersion = RootFSInstaller.LATEST_VERSION.toInt() 
 private val resolutions = setOf("960x540", "1280x720", "1600x900", "1920x1080") 
 private val vulkanDrivers = setOf(GraphicsDrivers.VORTEK, GraphicsDrivers.TURNIP) 

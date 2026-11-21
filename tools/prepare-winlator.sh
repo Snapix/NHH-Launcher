@@ -216,6 +216,28 @@ s = p.read_text().replace('"com.winlator.FileProvider"', '"com.noheroshere.snap.
 p.write_text(s)
 PY
 
+# Update upstream hard-coded sandbox paths to the NHH application ID.
+python3 - "$WINLATOR_APP/src/main/java/com/winlator/core/AppUtils.java" \
+    "$WINLATOR_APP/src/main/cpp/winlator/include/winlator.h" \
+    "$WINLATOR_APP/src/main/cpp/vortekrenderer/include/vortek.h" \
+    "$WINLATOR_APP/src/main/cpp/gladiorenderer/include/gladio.h" <<'PY'
+from pathlib import Path
+import sys
+
+replacements = {
+    "/data/data/com.winlator/storage": "/data/data/com.noheroshere.snap/storage",
+    "/data/data/com.winlator/cache": "/data/data/com.noheroshere.snap/cache",
+    "/data/data/com.winlator/files/rootfs/tmp/.vortek/V0": "/data/data/com.noheroshere.snap/files/rootfs/tmp/.vortek/V0",
+    "/data/data/com.winlator/files/rootfs/tmp/.X11-unix/X0": "/data/data/com.noheroshere.snap/files/rootfs/tmp/.X11-unix/X0",
+}
+for name in sys.argv[1:]:
+    path = Path(name)
+    text = path.read_text()
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    path.write_text(text)
+PY
+
 # Rename the native background-session notification and app strings for NHH.
 FOREGROUND_SERVICE="$WINLATOR_APP/src/main/java/com/winlator/services/ForegroundService.java"
 python3 - "$FOREGROUND_SERVICE" <<'PY'

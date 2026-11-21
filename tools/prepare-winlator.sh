@@ -239,7 +239,7 @@ import sys
 p = Path(sys.argv[1])
 s = p.read_text()
 s = s.replace('<string name="app_name">Winlator</string>', '<string name="app_name">No Heroes Here</string>')
-s = s.replace("Keeps Winlator running in the background so a wine session is not interrupted by Android's background process management.", "Keeps No Heroes Here running in the background so the game session is not interrupted by Android's background process management.")
+s = s.replace("Keeps Winlator running in the background so a wine session is not interrupted by Android\\'s background process management.", "Keeps No Heroes Here running in the background so the game session is not interrupted by Android\\'s background process management.")
 s = s.replace('<string name="fgs_notification_content_else">Winlator is running in the background</string>', '<string name="fgs_notification_content_else">No Heroes Here is running in the background</string>')
 p.write_text(s)
 PY

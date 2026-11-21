@@ -1,30 +1,34 @@
-# NHH Launcher
+# No Heroes Here — Android
 
-Dedicated Android launcher/runtime for NHH.
+A dedicated Android port and launcher for **No Heroes Here**.
 
-## Current flow
+The game is not included in this repository or APK. Users import a ZIP of their own legally obtained game files.
 
-- First launch asks for the user's NHH ZIP.
-- ZIP is extracted into private app storage.
-- The launcher recursively searches for NHH.exe.
-- The discovered executable path is persisted.
-- Later launches go directly to the NHH main menu.
-- Main menu: Run Game and Settings.
+## App identity
 
-The game itself is not included in this repository or APK.
+- Android application ID: `com.noheroshere.snap`
+- Launcher implementation namespace: `com.snapix.nhhlauncher`
 
-## Runtime
+## Current experience
 
-The intended runtime is based on the open-source Winlator stack: Wine, Box86/Box64 and the associated graphics/runtime components. Winlator is LGPL-2.1; third-party components have their own licenses.
+- First-run setup imports and extracts the user's game ZIP into private app storage.
+- The launcher locates the game executable and prepares its isolated game environment.
+- The game folder is mapped as drive `G:`.
+- Two supplied touch layouts are installed as native controller profiles:
+  - **NHH MAIN**
+  - **NHH MAIN no key**
+- The in-session NHH menu provides Resume, Edit Controls, Cast and Save and exit.
+- Chromecast screen casting uses Android screen capture and a low-latency HLS stream.
+- The main menu includes runtime settings, controller editing and desktop access.
 
-Upstream:
-https://github.com/brunodev85/winlator
-https://github.com/brunodev85/winlator-app
+## Runtime and attribution
 
-## Status
+This project integrates the open-source [Winlator](https://github.com/brunodev85/winlator) and [Winlator app](https://github.com/brunodev85/winlator-app) codebase for the Windows compatibility and graphics runtime, including Wine and Box86/Box64 components.
 
-The Android launcher shell and secure ZIP installation flow are implemented first. Winlator runtime integration is the next milestone.
+Winlator is licensed under LGPL-2.1. Third-party components retain their respective licenses. See upstream repositories and included license notices for details.
+
+The Android launcher, NHH interface and NHH-specific integration are maintained in this repository.
 
 ## Build
 
-GitHub Actions builds a debug APK on pushes to main and dev.
+GitHub Actions builds a debug APK on pushes to `main` and `dev`. The workflow verifies the application ID, launcher activity, artwork and both controller profile assets.

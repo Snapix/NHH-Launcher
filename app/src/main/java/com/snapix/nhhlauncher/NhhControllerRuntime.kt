@@ -1,219 +1,254 @@
-package com.snapix.nhhlauncher 
-import android.app.Activity 
-import android.content.Context 
-import android.content.SharedPreferences 
-import android.graphics.Rect 
-import android.os.Build 
-import android.util.Log 
-import android.view.MotionEvent 
-import android.view.View 
-import android.view.ViewTreeObserver 
-import androidx.core.view.ViewCompat 
-import androidx.core.view.WindowInsetsCompat 
-import com.winlator.inputcontrols.ControlsProfile 
-import com.winlator.inputcontrols.InputControlsManager 
-import com.winlator.widget.InputControlsView 
-import com.winlator.xserver.XServer 
-import org.json.JSONArray 
-import org.json.JSONObject 
-import java.io.File 
-import java.util.concurrent.CopyOnWriteArrayList 
-import kotlin.math.max 
-import kotlin.math.min /** * Explicit runtime owner for the NHH Virtual Xbox Controller. * * Lifecycle: * Game starts -> createOrLoadProfile() -> applySafeAreaInsets() -> attach() * -> loadElements() after measure -> verifyBackendReady() -> Game receives XInput * * Safe cleanup on pause, screen lock, rotation, cast start/stop, crash, or exit. */ 
-object NhhControllerRuntime { 
-private const val TAG = "NHHController" const 
-val NHH_PROFILE_ID = 900 const 
-val NHH_PROFILE_NAME = "NHH Xbox Layout" 
-private const val PREFS = "nhh" 
-private const val PREF_LAYOUT_VERSION = "nhh_layout_version" 
-private const val PREF_OVERLAY_OPACITY = "nhh_overlay_opacity" 
-private const val PREF_CONTROL_SCALE = "nhh_control_scale" 
-private const val PREF_STICK_DEADZONE = "nhh_stick_deadzone" 
-private const val PREF_INPUT_API = "nhh_input_api" // "XINPUT", "DINPUT", "BOTH" 
-private const val CURRENT_LAYOUT_VERSION = 3 
-enum class LifecycleState { DETACHED, PROFILE_LOADED, ATTACHED_WAITING_MEASURE, ACTIVE_DISPATCHING, PAUSED } 
-data class DiagnosticsSnapshot( 
-val state: LifecycleState = LifecycleState.DETACHED, 
-val profileId: Int = NHH_PROFILE_ID, 
-val elementCount: Int = 0, 
-val isVirtualGamepad: Boolean = false, 
-val touchscreenControlsEnabled: Boolean = false, 
-val winHandlerReady: Boolean = false, 
-val preferredInputApi: String = "XINPUT", 
-val safeInsetLeft: Int = 0, 
-val safeInsetTop: Int = 0, 
-val safeInsetRight: Int = 0, 
-val safeInsetBottom: Int = 0, 
-val viewportWidth: Int = 0, 
-val viewportHeight: Int = 0, 
-val lastDispatchEvent: String = "Idle", 
-val dispatchCount: Long = 0L ) 
-@Volatile 
-var snapshot: DiagnosticsSnapshot = DiagnosticsSnapshot() private set 
-private val listeners = CopyOnWriteArrayList<(DiagnosticsSnapshot) -> Unit>() 
-@Volatile 
-private var attachedView: InputControlsView? = null 
-@Volatile 
-private var attachedXServer: XServer? = null 
-@Volatile 
-private var attachedProfile: ControlsProfile? = null 
-@Volatile 
-private var activeInsets: Rect = Rect() 
-fun addDiagnosticsListener(listener: (DiagnosticsSnapshot) -> Unit) { listeners.add(listener) listener(snapshot) } 
-fun removeDiagnosticsListener(listener: (DiagnosticsSnapshot) -> Unit) { listeners.remove(listener) } 
-private fun updateSnapshot(transform: (DiagnosticsSnapshot) -> DiagnosticsSnapshot) { snapshot = transform(snapshot) 
-for (l in listeners) { 
-try { l(snapshot) } 
-catch
-catch (_: Throwable) {} } } /** * Ensures the dedicated NHH-only Xbox Controller profile exists on disk. * Contains ONLY the controls needed for No Heroes Here: * Left Stick, D-Pad, A, B, X, Y, LB (L1), LT (L2), RB (R1), RT (R2), Menu (Start). */ @JvmStatic 
-fun ensureNhhProfile(context: Context, forceReset: Boolean = false): ControlsProfile { 
-val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) 
-val profileFile = resolveProfileFile(context, NHH_PROFILE_ID) 
-val savedVersion = prefs.getInt(PREF_LAYOUT_VERSION, 0) 
-if (forceReset || !profileFile.isFile || savedVersion < CURRENT_LAYOUT_VERSION) { profileFile.parentFile?.mkdirs() 
-val scale = prefs.getFloat(PREF_CONTROL_SCALE, 1.0f).coerceIn(0.70f, 1.35f) 
-val json = buildDefaultNhhProfileJson(context, scale) profileFile.write
-Text(json.toString(2)) prefs.edit().putInt(PREF_LAYOUT_VERSION, CURRENT_LAYOUT_VERSION).apply() Log.i(TAG, "Wrote default NHH Xbox layout profile to ${profileFile.absolutePath}") } 
-val manager = InputControlsManager(context) 
-val profile = manager.getProfile(NHH_PROFILE_ID) ?: 
-throw IllegalStateException("Failed to load NHH Xbox ControlsProfile (id=$NHH_PROFILE_ID).") profile.loadControllers() updateSnapshot { it.copy( state = LifecycleState.PROFILE_LOADED, profileId = profile.id, isVirtualGamepad = checkIsVirtualGamepad(profile) ) } 
-return profile } @JvmStatic 
-fun resetNhhProfile(context: Context): ControlsProfile { 
-return ensureNhhProfile(context, forceReset = true) } /** * Resolves the exact directory Winlator's InputControlsManager reads/writes `.icp` profiles from. */ 
-private fun resolveProfileFile(context: Context, profileId: Int): File { 
-return 
-try { 
-val method = ControlsProfile::class.java.getDeclaredMethod( "getProfileFile", Context::class.java, Int::class.javaPrimitiveType ) method.isAccessible = true method.invoke(null, context, profileId) as File } 
-catch
-catch (_: Throwable) { File(File(context.filesDir, "profiles"), "controls-$profileId.icp") } } /** * Computes an ergonomic scale factor based on screen smallest width so buttons * never appear oversized on phones or microscopic on tablets. */ 
-private fun computeResponsiveScale(context: Context, userScale: Float): Float { 
-val dm = context.resources.displayMetrics 
-val minDimDp = min(dm.widthPixels, dm.heightPixels) / dm.density 
-val deviceFactor = 
-when { minDimDp < 360f -> 0.86f minDimDp > 600f -> 1.12f 
-else -> 1.0f } 
-return (deviceFactor * userScale).coerceIn(0.68f, 1.40f) } /** * Builds the strict No Heroes Here Xbox Controller .icp JSON. * Coordinates are normalized [0.0 .. 1.0] inside the safe-area viewport. */ 
-private fun buildDefaultNhhProfileJson(context: Context, userScale: Float): JSONObject { 
-val base = computeResponsiveScale(context, userScale) 
-val faceScale = (1.05f * base).coerceIn(0.75f, 1.40f) 
-val shoulderScale = (0.95f * base).coerceIn(0.70f, 1.30f) 
-val stickScale = (1.10f * base).coerceIn(0.80f, 1.45f) 
-val dpadScale = (0.88f * base).coerceIn(0.68f, 1.25f) 
-val menuScale = (0.80f * base).coerceIn(0.65f, 1.15f) 
-val elements = JSONArray().apply { // Left Stick: Move character / climb ladders / navigate menus put(elementJson( type = "STICK", shape = "CIRCLE", bindings = listOf( "GAMEPAD_LEFT_THUMB_UP", "GAMEPAD_LEFT_THUMB_RIGHT", "GAMEPAD_LEFT_THUMB_DOWN", "GAMEPAD_LEFT_THUMB_LEFT" ), scale = stickScale, x = 0.145, y = 0.720, text = "" )) // D-Pad: Precision ladder/platform movement & menu navigation put(elementJson( type = "D_PAD", shape = "CIRCLE", bindings = listOf( "GAMEPAD_DPAD_UP", "GAMEPAD_DPAD_RIGHT", "GAMEPAD_DPAD_DOWN", "GAMEPAD_DPAD_LEFT" ), scale = dpadScale, x = 0.145, y = 0.375, text = "" )) // LB (L1) & LT (L2): Switch between characters (solo 2-character mode) put(elementJson( type = "BUTTON", shape = "ROUND_RECT", bindings = listOf("GAMEPAD_BUTTON_L1"), scale = shoulderScale, x = 0.105, y = 0.165, text = "LB" )) put(elementJson( type = "BUTTON", shape = "ROUND_RECT", bindings = listOf("GAMEPAD_BUTTON_L2"), scale = shoulderScale, x = 0.215, y = 0.165, text = "LT" )) // RB (R1) & RT (R2): Fire cannon / Quick-
-throw put(elementJson( type = "BUTTON", shape = "ROUND_RECT", bindings = listOf("GAMEPAD_BUTTON_R1"), scale = shoulderScale, x = 0.785, y = 0.165, text = "RB" )) put(elementJson( type = "BUTTON", shape = "ROUND_RECT", bindings = listOf("GAMEPAD_BUTTON_R2"), scale = shoulderScale, x = 0.895, y = 0.165, text = "RT" )) // Face Buttons (Xbox diamond layout) // Y: Dash / Sprint put(elementJson( type = "BUTTON", shape = "CIRCLE", bindings = listOf("GAMEPAD_BUTTON_Y"), scale = faceScale, x = 0.845, y = 0.560, text = "Y" )) // X: Interact / Work (pick up/drop, load cannons, clean barrels) put(elementJson( type = "BUTTON", shape = "CIRCLE", bindings = listOf("GAMEPAD_BUTTON_X"), scale = faceScale, x = 0.775, y = 0.700, text = "X" )) // B: Throw held item / Back put(elementJson( type = "BUTTON", shape = "CIRCLE", bindings = listOf("GAMEPAD_BUTTON_B"), scale = faceScale, x = 0.915, y = 0.700, text = "B" )) // A: Jump / Confirm put(elementJson( type = "BUTTON", shape = "CIRCLE", bindings = listOf("GAMEPAD_BUTTON_A"), scale = faceScale, x = 0.845, y = 0.840, text = "A" )) // Menu (Start): Pause game / Open controller & remapping settings put(elementJson( type = "BUTTON", shape = "ROUND_RECT", bindings = listOf("GAMEPAD_BUTTON_START"), scale = menuScale, x = 0.500, y = 0.900, text = "MENU" )) } 
-return JSONObject().apply { put("id", NHH_PROFILE_ID) put("name", NHH_PROFILE_NAME) put("cursorSpeed", 1.0) put("elements", elements) } } 
-private fun elementJson( type: String, shape: String, bindings: List<String>, scale: Float, x: Double, y: Double, text: String ): JSONObject { 
-val padded = JSONArray() 
-for (i in 0 until 4) { padded.put(bindings.getOrElse(i) { "NONE" }) } 
-return JSONObject().apply { put("type", type) put("shape", shape) put("bindings", padded) put("scale", scale.toDouble()) put("x", x) put("y", y) put("toggleSwitch", false) put("text", text) put("iconId", 0) } } /** * Applies identical Android safe-area (cutout + gesture/system bar) margins to * InputControlsView in BOTH XServerDisplayActivity and ControlsEditorActivity * so editor coordinates match runtime coordinates 1:1. */ @JvmStatic 
-fun applySafeAreaInsets(activity: Activity, targetView: View) { ViewCompat.setOnApplyWindowInsetsListener(targetView) { view, windowInsets -> 
-val bars = windowInsets.getInsets( WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.systemGestures() ) 
-val density = activity.resources.displayMetrics.density // Reserve a thin safe margin for edge-swipe gestures without wasting screen space 
-val minPad = (6 * density).toInt() 
-val left = max(bars.left, minPad) 
-val top = max(bars.top, minPad) 
-val right = max(bars.right, minPad) 
-val bottom = max(bars.bottom, minPad) activeInsets = Rect(left, top, right, bottom) 
-val lp = view.layoutParams 
-if (lp is android.view.ViewGroup.MarginLayoutParams) { 
-if (lp.leftMargin != left || lp.topMargin != top || lp.rightMargin != right || lp.bottomMargin != bottom) { lp.setMargins(left, top, right, bottom) view.layoutParams = lp } } updateSnapshot { it.copy( safeInsetLeft = left, safeInsetTop = top, safeInsetRight = right, safeInsetBottom = bottom ) } windowInsets } ViewCompat.requestApplyInsets(targetView) } /** * Full controller attachment sequence called from XServerDisplayActivity. * Guarantees: * 1) InputControlsView is visible, focusable, above TouchpadView, and inset-aligned. * 2) ControlsProfile elements are loaded AFTER view layout has non-zero bounds. * 3) XServer + WinHandler XInput backend is configured and synced immediately. */ @JvmStatic 
-fun attachToSession( activity: Activity, inputControlsView: InputControlsView, xServer: XServer?, profileId: Int ) { 
-val prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE) 
-val profile = 
-if (profileId == NHH_PROFILE_ID || profileId <= 0) { ensureNhhProfile(activity) } 
-else
-else { InputControlsManager(activity).getProfile(profileId) ?: ensureNhhProfile(activity) } attachedView = inputControlsView attachedXServer = xServer attachedProfile = profile applySafeAreaInsets(activity, inputControlsView) 
-val opacity = prefs.getFloat(PREF_OVERLAY_OPACITY, 0.55f).coerceIn(0.15f, 1.0f) 
-val preferredApi = prefs.getString(PREF_INPUT_API, "XINPUT") ?: "XINPUT" inputControlsView.setShowTouchscreenControls(true) inputControlsView.setOverlayOpacity(opacity) inputControlsView.setProfile(profile) inputControlsView.visibility = View.VISIBLE inputControlsView.bringToFront() // Ensure XServer is wired into InputControlsView 
-if (xServer != null) { invokeSafe(inputControlsView, "setXServer", arrayOf(XServer::class.java), arrayOf(xServer)) } updateSnapshot { it.copy( state = LifecycleState.ATTACHED_WAITING_MEASURE, profileId = profile.id, isVirtualGamepad = checkIsVirtualGamepad(profile), touchscreenControlsEnabled = true, preferredInputApi = preferredApi ) } 
-val finalizeAttach = Runnable { 
-val w = inputControlsView.width 
-val h = inputControlsView.height 
-if (w <= 0 || h <= 0) return@Runnable // Reload elements cleanly for the actual safe-area viewport dimensions invokeSafe(profile, "loadElements", arrayOf(InputControlsView::class.java), arrayOf(inputControlsView)) inputControlsView.invalidate() 
-val winReady = initializeWinHandlerInput(xServer, preferredApi) 
-val count = getElementCount(profile) updateSnapshot { it.copy( state = 
-if (winReady) LifecycleState.ACTIVE_DISPATCHING 
-else LifecycleState.ATTACHED_WAITING_MEASURE, elementCount = count, isVirtualGamepad = checkIsVirtualGamepad(profile), winHandlerReady = winReady, viewportWidth = w, viewportHeight = h, lastDispatchEvent = 
-if (winReady) "XInput backend synced" 
-else "Waiting for WinHandler" ) } Log.i(TAG, "Attached NHH controller: ${w}x${h}, elements=$count, winHandlerReady=$winReady, api=$preferredApi") } 
-if (inputControlsView.width > 0 && inputControlsView.height > 0) { inputControlsView.post(finalizeAttach) } 
-else
-else { inputControlsView.viewTreeObserver.addOnGlobalLayoutListener(
-object : ViewTreeObserver.OnGlobalLayoutListener { override 
-fun onGlobalLayout() { 
-if (inputControlsView.width > 0 && inputControlsView.height > 0) { inputControlsView.viewTreeObserver.removeOnGlobalLayoutListener(this) finalizeAttach.run() } } }) } // Re-sync after Wine/WinHandler boot completes (covers async container startup) inputControlsView.postDelayed({ 
-if (attachedView === inputControlsView) { 
-val winReady = initializeWinHandlerInput(attachedXServer, preferredApi) 
-if (winReady) { updateSnapshot { it.copy( state = LifecycleState.ACTIVE_DISPATCHING, winHandlerReady = true, lastDispatchEvent = "Post-boot XInput sync OK" ) } } } }, 1800L) } /** * Called 
-when the Activity pauses, screen locks, or Cast starts. * Flushes zeroed gamepad state to Wine so no button/stick gets stuck held down. */ @JvmStatic 
-fun onSessionPaused() { resetGamepadState(attachedProfile, attachedXServer) updateSnapshot { it.copy( state = LifecycleState.PAUSED, lastDispatchEvent = "Paused (released all inputs)" ) } } /** * Called 
-when the Activity resumes, screen unlocks, or Cast returns. * Re-syncs profile elements, z-order, and WinHandler state. */ @JvmStatic 
-fun onSessionResumed(activity: Activity) { 
-val view = attachedView ?: 
-return 
-val profile = attachedProfile ?: 
-return 
-val prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE) 
-val preferredApi = prefs.getString(PREF_INPUT_API, "XINPUT") ?: "XINPUT" view.post { 
-if (view.width > 0 && view.height > 0) { invokeSafe(profile, "loadElements", arrayOf(InputControlsView::class.java), arrayOf(view)) view.invalidate() } 
-val winReady = initializeWinHandlerInput(attachedXServer, preferredApi) updateSnapshot { it.copy( state = 
-if (winReady) LifecycleState.ACTIVE_DISPATCHING 
-else LifecycleState.ATTACHED_WAITING_MEASURE, winHandlerReady = winReady, viewportWidth = view.width, viewportHeight = view.height, lastDispatchEvent = "Resumed & re-synced" ) } } } /** * Called on orientation or window size change (e.g., rotation, split-screen, PiP, Cast). */ @JvmStatic 
-fun onViewportChanged(activity: Activity, view: InputControlsView) { 
-val profile = attachedProfile ?: 
-return resetGamepadState(profile, attachedXServer) applySafeAreaInsets(activity, view) view.post { 
-if (view.width > 0 && view.height > 0) { invokeSafe(profile, "loadElements", arrayOf(InputControlsView::class.java), arrayOf(view)) view.invalidate() updateSnapshot { it.copy( viewportWidth = view.width, viewportHeight = view.height, lastDispatchEvent = "Viewport resized (${view.width}x${view.height})" ) } } } } /** * Called on Activity destroy / game exit. Releases all held controls and drops references. */ @JvmStatic 
-fun detachFromSession() { resetGamepadState(attachedProfile, attachedXServer) attachedView = null attachedXServer = null attachedProfile = null updateSnapshot { DiagnosticsSnapshot(state = LifecycleState.DETACHED, lastDispatchEvent = "Detached cleanly") } } /** * Called by patched InputControlsView whenever a touch input event dispatches to WinHandler. */ @JvmStatic 
-fun recordDispatchedEvent(description: String) { updateSnapshot { it.copy( state = LifecycleState.ACTIVE_DISPATCHING, winHandlerReady = true, lastDispatchEvent = description, dispatchCount = it.dispatchCount + 1L ) } } /** * Configures Winlator's WinHandler for XInput/DInput and pushes an initial GamepadState frame * so Wine's winebus/xinput driver enumerates the virtual Xbox controller immediately. */ 
-private fun initializeWinHandlerInput(xServer: XServer?, preferredApi: String): Boolean { 
-if (xServer == null) 
-return false 
-return 
-try { 
-val winHandler = xServer.winHandler ?: 
-return false // Set PreferredInputApi (XINPUT / DIRECTINPUT / BOTH) if supported by this Winlator build 
-try { 
-val apiEnumClass = Class.forName("com.winlator.winhandler.WinHandler\$PreferredInputApi") 
-val enumName = 
-when (preferredApi.uppercase()) { "DINPUT", "DIRECTINPUT" -> "DIRECTINPUT" "BOTH", "AUTO" -> "BOTH" 
-else -> "XINPUT" } 
-val apiValue = java.lang.Enum.valueOf(apiEnumClass.asSubclass(Enum::class.java), enumName) 
-val setter = winHandler.javaClass.getMethod("setPreferredInputApi", apiEnumClass) setter.invoke(winHandler, apiValue) } 
-catch
-catch (_: Throwable) { // Optional across upstream Winlator revisions } // Trigger representVirtualGamepad() if present, then push initial sendGamepadState() invokeSafe(winHandler, "representVirtualGamepad", emptyArray(), emptyArray()) invokeSafe(winHandler, "sendGamepadState", emptyArray(), emptyArray()) true } 
-catch
-catch (t: Throwable) { Log.w(TAG, "WinHandler sync failed: ${t.message}") false } } 
-private fun resetGamepadState(profile: ControlsProfile?, xServer: XServer?) { 
-try { 
-if (profile != null) { 
-val state = invokeSafe(profile, "getGamepadState", emptyArray(), emptyArray()) 
-if (state != null) { // Zero sticks, triggers, dpad, and button bitmask setFieldSafe(state, "thumbLX", 0f) setFieldSafe(state, "thumbLY", 0f) setFieldSafe(state, "thumbRX", 0f) setFieldSafe(state, "thumbRY", 0f) setFieldSafe(state, "triggerL", 0f) setFieldSafe(state, "triggerR", 0f) setFieldSafe(state, "buttons", 0.toShort()) invokeSafe(state, "reset", emptyArray(), emptyArray()) } } 
-val winHandler = xServer?.winHandler 
-if (winHandler != null) { invokeSafe(winHandler, "sendGamepadState", emptyArray(), emptyArray()) } } 
-catch
-catch (_: Throwable) {} } 
-private fun checkIsVirtualGamepad(profile: ControlsProfile): Boolean { 
-val result = invokeSafe(profile, "isVirtualGamepad", emptyArray(), emptyArray()) 
-return (result as? Boolean) ?: true } 
-private fun getElementCount(profile: ControlsProfile): Int { 
-val list = invokeSafe(profile, "getElements", emptyArray(), emptyArray()) as? List<*> 
-return list?.size ?: 0 } 
-private fun invokeSafe( target: Any, methodName: String, paramTypes: Array<Class<*>>, args: Array<Any> ): Any? { 
-return 
-try { 
-val m = target.javaClass.getMethod(methodName, *paramTypes) m.invoke(target, *args) } 
-catch
-catch (_: Throwable) { null } } 
-private fun setFieldSafe(target: Any, fieldName: String, value: Any) { 
-try { 
-val f = target.javaClass.getDeclaredField(fieldName) f.isAccessible = true f.set(target, value) } 
-catch
-catch (_: Throwable) {} } 
-fun getOverlayOpacity(prefs: SharedPreferences): Float = prefs.getFloat(PREF_OVERLAY_OPACITY, 0.55f).coerceIn(0.15f, 1.0f) 
-fun getControlScale(prefs: SharedPreferences): Float = prefs.getFloat(PREF_CONTROL_SCALE, 1.0f).coerceIn(0.70f, 1.35f) 
-fun getStickDeadzone(prefs: SharedPreferences): Float = prefs.getFloat(PREF_STICK_DEADZONE, 0.12f).coerceIn(0.02f, 0.35f) 
-fun getPreferredInputApi(prefs: SharedPreferences): String = prefs.getString(PREF_INPUT_API, "XINPUT") ?: "XINPUT" 
-fun saveControllerPreferences( context: Context, prefs: SharedPreferences, opacity: Float, scale: Float, deadzone: Float, inputApi: String ) { 
-val oldScale = prefs.getFloat(PREF_CONTROL_SCALE, 1.0f) prefs.edit() .putFloat(PREF_OVERLAY_OPACITY, opacity.coerceIn(0.15f, 1.0f)) .putFloat(PREF_CONTROL_SCALE, scale.coerceIn(0.70f, 1.35f)) .putFloat(PREF_STICK_DEADZONE, deadzone.coerceIn(0.02f, 0.35f)) .putString(PREF_INPUT_API, inputApi) .apply() 
-if (kotlin.math.abs(oldScale - scale) > 0.01f) { ensureNhhProfile(context, forceReset = true) } } }
+package com.snapix.nhhlauncher
+
+import android.app.Activity
+import android.content.Context
+import android.content.SharedPreferences
+import android.view.View
+import android.view.ViewTreeObserver
+import com.winlator.inputcontrols.ControlsProfile
+import com.winlator.inputcontrols.InputControlsManager
+import com.winlator.widget.InputControlsView
+import com.winlator.xserver.XServer
+import java.util.concurrent.CopyOnWriteArrayList
+
+object NhhControllerRuntime {
+    const val NHH_PROFILE_ID = 100
+    private const val TEMPLATE_PROFILE_ID = 3
+    private const val PROFILE_NAME = "NHH Xbox"
+
+    private const val PREF_OVERLAY_OPACITY = "nhh_overlay_opacity"
+    private const val PREF_CONTROL_SCALE = "nhh_control_scale"
+    private const val PREF_STICK_DEADZONE = "nhh_stick_deadzone"
+    private const val PREF_INPUT_API = "nhh_input_api"
+
+    enum class LifecycleState {
+        DETACHED, ATTACHED_WAITING_MEASURE, ACTIVE_DISPATCHING, PAUSED
+    }
+
+    data class DiagnosticsSnapshot(
+        val state: LifecycleState = LifecycleState.DETACHED,
+        val profileId: Int = NHH_PROFILE_ID,
+        val elementCount: Int = 0,
+        val isVirtualGamepad: Boolean = true,
+        val touchscreenControlsEnabled: Boolean = false,
+        val preferredInputApi: String = "XINPUT",
+        val winHandlerReady: Boolean = false,
+        val dispatchCount: Long = 0,
+        val lastDispatchEvent: String = "Not attached",
+        val viewportWidth: Int = 0,
+        val viewportHeight: Int = 0
+    )
+
+    @Volatile
+    var snapshot: DiagnosticsSnapshot = DiagnosticsSnapshot()
+        private set
+
+    private val listeners = CopyOnWriteArrayList<(DiagnosticsSnapshot) -> Unit>()
+    private var attachedView: InputControlsView? = null
+    private var attachedProfile: ControlsProfile? = null
+
+    fun addDiagnosticsListener(listener: (DiagnosticsSnapshot) -> Unit) {
+        listeners.add(listener)
+        listener(snapshot)
+    }
+
+    fun removeDiagnosticsListener(listener: (DiagnosticsSnapshot) -> Unit) {
+        listeners.remove(listener)
+    }
+
+    private fun update(block: (DiagnosticsSnapshot) -> DiagnosticsSnapshot) {
+        snapshot = block(snapshot)
+        listeners.forEach { it(snapshot) }
+    }
+
+    fun ensureNhhProfile(context: Context, forceReset: Boolean = false): ControlsProfile {
+        val manager = InputControlsManager(context)
+        var profile = manager.getProfile(NHH_PROFILE_ID)
+
+        if (profile == null || forceReset) {
+            if (profile != null) {
+                manager.removeProfile(profile)
+            }
+
+            val template = manager.getProfile(TEMPLATE_PROFILE_ID)
+                ?: manager.getProfiles().firstOrNull { it.isVirtualGamepad }
+                ?: manager.getProfiles().firstOrNull()
+                ?: throw IllegalStateException("Winlator has no input-control profile.")
+
+            profile = manager.duplicateProfile(template)
+            profile.setName(PROFILE_NAME)
+            profile.save()
+        }
+
+        return profile
+    }
+
+    fun resetNhhProfile(context: Context) {
+        ensureNhhProfile(context, true)
+    }
+
+    fun attachToSession(
+        activity: Activity,
+        inputControlsView: InputControlsView,
+        xServer: XServer?,
+        profileId: Int = NHH_PROFILE_ID
+    ) {
+        val prefs = activity.getSharedPreferences("nhh", Context.MODE_PRIVATE)
+        val profile = if (profileId == NHH_PROFILE_ID) {
+            ensureNhhProfile(activity)
+        } else {
+            InputControlsManager.loadProfile(
+                activity,
+                ControlsProfile.getProfileFile(activity, profileId)
+            ) ?: ensureNhhProfile(activity)
+        }
+
+        attachedView = inputControlsView
+        attachedProfile = profile
+
+        inputControlsView.setXServer(xServer)
+        inputControlsView.setOverlayOpacity(getOverlayOpacity(prefs))
+        inputControlsView.setShowTouchscreenControls(true)
+        inputControlsView.setProfile(profile)
+        inputControlsView.visibility = View.VISIBLE
+        inputControlsView.bringToFront()
+
+        val finishAttach = Runnable {
+            val width = inputControlsView.width
+            val height = inputControlsView.height
+            if (width <= 0 || height <= 0) return@Runnable
+
+            profile.loadElements(inputControlsView)
+            inputControlsView.invalidate()
+
+            update {
+                it.copy(
+                    state = LifecycleState.ACTIVE_DISPATCHING,
+                    profileId = profile.id,
+                    elementCount = profile.getElements().size,
+                    isVirtualGamepad = profile.isVirtualGamepad,
+                    touchscreenControlsEnabled = true,
+                    preferredInputApi = getPreferredInputApi(prefs),
+                    winHandlerReady = xServer != null && xServer.getWinHandler() != null,
+                    viewportWidth = width,
+                    viewportHeight = height,
+                    lastDispatchEvent = "Controller attached"
+                )
+            }
+        }
+
+        if (inputControlsView.width > 0 && inputControlsView.height > 0) {
+            inputControlsView.post(finishAttach)
+        } else {
+            inputControlsView.viewTreeObserver.addOnGlobalLayoutListener(
+                object : ViewTreeObserver.OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        if (inputControlsView.width > 0 && inputControlsView.height > 0) {
+                            inputControlsView.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                            finishAttach.run()
+                        }
+                    }
+                }
+            )
+        }
+
+        update {
+            it.copy(
+                state = LifecycleState.ATTACHED_WAITING_MEASURE,
+                profileId = profile.id,
+                preferredInputApi = getPreferredInputApi(prefs),
+                touchscreenControlsEnabled = true
+            )
+        }
+    }
+
+    fun onSessionPaused() {
+        attachedView?.visibility = View.GONE
+        update {
+            it.copy(
+                state = LifecycleState.PAUSED,
+                lastDispatchEvent = "Session paused; overlay hidden"
+            )
+        }
+    }
+
+    fun onSessionResumed(activity: Activity) {
+        val view = attachedView ?: return
+        view.visibility = View.VISIBLE
+        view.post {
+            attachedProfile?.loadElements(view)
+            view.invalidate()
+            update {
+                it.copy(
+                    state = LifecycleState.ACTIVE_DISPATCHING,
+                    viewportWidth = view.width,
+                    viewportHeight = view.height,
+                    lastDispatchEvent = "Session resumed"
+                )
+            }
+        }
+    }
+
+    fun onViewportChanged(activity: Activity, view: InputControlsView) {
+        if (attachedView !== view) return
+        attachedProfile?.loadElements(view)
+        view.invalidate()
+        update {
+            it.copy(
+                viewportWidth = view.width,
+                viewportHeight = view.height,
+                lastDispatchEvent = "Viewport changed"
+            )
+        }
+    }
+
+    fun detachFromSession() {
+        attachedView?.visibility = View.GONE
+        attachedView = null
+        attachedProfile = null
+        update { DiagnosticsSnapshot() }
+    }
+
+    fun recordDispatchedEvent(description: String) {
+        update {
+            it.copy(
+                state = LifecycleState.ACTIVE_DISPATCHING,
+                winHandlerReady = true,
+                dispatchCount = it.dispatchCount + 1L,
+                lastDispatchEvent = description
+            )
+        }
+    }
+
+    fun applySafeAreaInsets(activity: Activity, view: View) {
+        view.requestApplyInsets()
+    }
+
+    fun getOverlayOpacity(prefs: SharedPreferences): Float =
+        prefs.getFloat(PREF_OVERLAY_OPACITY, 0.55f).coerceIn(0.15f, 1f)
+
+    fun getControlScale(prefs: SharedPreferences): Float =
+        prefs.getFloat(PREF_CONTROL_SCALE, 1f).coerceIn(0.7f, 1.35f)
+
+    fun getStickDeadzone(prefs: SharedPreferences): Float =
+        prefs.getFloat(PREF_STICK_DEADZONE, 0.12f).coerceIn(0.02f, 0.35f)
+
+    fun getPreferredInputApi(prefs: SharedPreferences): String =
+        prefs.getString(PREF_INPUT_API, "XINPUT") ?: "XINPUT"
+
+    fun saveControllerPreferences(
+        context: Context,
+        prefs: SharedPreferences,
+        opacity: Float,
+        scale: Float,
+        deadzone: Float,
+        inputApi: String
+    ) {
+        prefs.edit()
+            .putFloat(PREF_OVERLAY_OPACITY, opacity.coerceIn(0.15f, 1f))
+            .putFloat(PREF_CONTROL_SCALE, scale.coerceIn(0.7f, 1.35f))
+            .putFloat(PREF_STICK_DEADZONE, deadzone.coerceIn(0.02f, 0.35f))
+            .putString(PREF_INPUT_API, inputApi)
+            .apply()
+    }
+}

@@ -82,6 +82,9 @@ convert -delay 9 -loop 0 /tmp/nhh-gif-frames/frame-*.jpg "$NHH_DRAWABLES/nhh_gam
 
 
 
+# 2d. Patch Winlator's native touch/gamepad dispatch path.
+python3 tools/patch_winlator_input.py "$WINLATOR_APP/src/main/java/com/winlator/widget/InputControlsView.java"
+
 # 3. Patch the rootfs installer so NHH can show setup progress without Winlator's launcher UI.
 ROOTFS_INSTALLER="$WINLATOR_APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
 python3 - "$ROOTFS_INSTALLER" <<'PY'

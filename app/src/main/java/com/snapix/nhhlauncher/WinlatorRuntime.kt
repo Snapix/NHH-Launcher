@@ -116,16 +116,15 @@ object WinlatorRuntime {
     }
 
     private fun mapGameDrive(container: Container, root: File) {
+        val legacySandboxPrefix = "/data/data/" + "com." + "winlator/"
+        val nhhSandboxPrefix = "/data/data/com.noheroshere.snap/"
         val drives = container.drivesIterator()
             .filterNot { it.letter.equals("G", true) }
             .map { drive ->
                 val path = when {
                     drive.letter.equals("E", true) -> AppUtils.INTERNAL_STORAGE
-                    drive.path.startsWith("/data/data/com.winlator/") ->
-                        drive.path.replaceFirst(
-                            "/data/data/com.winlator/",
-                            "/data/data/com.noheroshere.snap/"
-                        )
+                    drive.path.startsWith(legacySandboxPrefix) ->
+                        drive.path.replaceFirst(legacySandboxPrefix, nhhSandboxPrefix)
                     else -> drive.path
                 }
                 drive.letter + ":" + path.trimEnd('/') + "/"

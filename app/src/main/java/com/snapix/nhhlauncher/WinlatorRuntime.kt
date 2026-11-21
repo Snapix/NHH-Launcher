@@ -256,7 +256,7 @@ object WinlatorRuntime {
                 if (settings.wineEsync) "1" else "0"
             )
         )
-        container.setHUDMode(if (settings.showFpsHud) 1 else 0)
+        container.setHUDMode((if (settings.showFpsHud) 1 else 0).toByte())
         container.saveData()
 
         prefs.edit()

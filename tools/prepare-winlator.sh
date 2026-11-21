@@ -298,7 +298,10 @@ if "nhhSession = getIntent().hasExtra" not in s:
 # Never show native runtime dialogs in an NHH session.
 s = s.replace(
     "preloaderDialog.show(R.string.updating_system_files);",
-    "if (!nhhSession) preloaderDialog.show(R.string.updating_system_files);",
+    """if (nhhSession) com.snapix.nhhlauncher.NhhStartupOverlay.show(
+                        this, findViewById(R.id.FLXServerDisplay), "Updating game environment…"
+                );
+                else preloaderDialog.show(R.string.updating_system_files);""",
     1
 )
 s = s.replace(

@@ -1,5 +1,7 @@
 package com.snapix.nhhlauncher
 
+import com.winlator.R
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -358,7 +360,7 @@ private fun AnimatedGameGif() {
         factory = { ctx ->
             android.widget.ImageView(ctx).apply {
                 scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-                setImageResource(com.snapix.nhhlauncher.R.drawable.nhh_gameplay)
+                setImageResource(R.drawable.nhh_gameplay)
                 post {
                     if (android.os.Build.VERSION.SDK_INT >= 28) {
                         (drawable as? android.graphics.drawable.AnimatedImageDrawable)?.start()

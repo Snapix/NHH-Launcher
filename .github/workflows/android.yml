@@ -59,8 +59,9 @@ jobs:
           grep -q "package: name='com.noheroshere.snap'" /tmp/badging.txt
           grep -q "No Heroes Here" /tmp/badging.txt
           grep -q "launchable-activity: name='com.snapix.nhhlauncher.MainActivity'" /tmp/badging.txt
-          unzip -l "$APK" | grep -q "nhh_gameplay.gif"
+          grep -q "versionName='1.0.1'" /tmp/badging.txt
           unzip -l "$APK" | grep -q "nhh_hero.jpg"
+          unzip -l "$APK" | grep -q "NhhSessionMenu"
           unzip -l "$APK" | grep -q "nhh_poster.png"
           unzip -l "$APK" | grep -q "nhh_icon.png"
           unzip -l "$APK" | grep -q "assets/inputcontrols/profiles/controls-5.icp"

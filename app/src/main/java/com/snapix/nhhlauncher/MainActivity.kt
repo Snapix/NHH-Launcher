@@ -56,6 +56,13 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WinlatorRuntime.installCrashRecorder(this)
+        val prefs = getSharedPreferences("nhh", Context.MODE_PRIVATE)
+        val game = prefs.getString("game_exe", null)?.let(::File)
+        if (!prefs.getBoolean("onboarding_complete", false) && game?.isFile != true) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
         setContent { NhhApp(this) }
     }
 }
@@ -291,17 +298,8 @@ private fun MainMenu(
             }
         }
 
-        Box(
-            Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(24.dp))
-                .background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.surfaceContainerHigh, Color(0xDD140B0B)))),
-            contentAlignment = Alignment.BottomStart
-        ) {
-            Text(
-                "NHH XBOX CONTROLLER READY",
-                Modifier.align(Alignment.BottomStart).padding(16.dp),
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))) {
+            AnimatedGameGif()
         }
 
         Button(
@@ -314,17 +312,10 @@ private fun MainMenu(
             Text("RUN GAME", fontWeight = FontWeight.ExtraBold)
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FilledTonalButton(onClick = onEditControls, modifier = Modifier.weight(1f).height(56.dp)) {
-                Icon(Icons.Default.Gamepad, null)
-                Spacer(Modifier.width(6.dp))
-                Text("EDIT LAYOUT")
-            }
-            FilledTonalButton(onClick = onTestController, modifier = Modifier.weight(1f).height(56.dp)) {
-                Icon(Icons.Default.Tune, null)
-                Spacer(Modifier.width(6.dp))
-                Text("TEST PAD")
-            }
+        FilledTonalButton(onClick = onEditControls, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            Icon(Icons.Default.Gamepad, null)
+            Spacer(Modifier.width(8.dp))
+            Text("CONTROLS")
         }
 
         OutlinedButton(
@@ -355,6 +346,26 @@ private fun MainMenu(
             }
         }
     }
+}
+
+
+
+@Composable
+private fun AnimatedGameGif() {
+    AndroidView(
+        factory = { ctx ->
+            android.widget.ImageView(ctx).apply {
+                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                setImageResource(com.snapix.nhhlauncher.R.drawable.nhh_gameplay)
+                post {
+                    if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        (drawable as? android.graphics.drawable.AnimatedImageDrawable)?.start()
+                    }
+                }
+            }
+        },
+        modifier = Modifier.fillMaxWidth().height(180.dp)
+    )
 }
 
 @Composable

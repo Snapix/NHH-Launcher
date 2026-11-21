@@ -11,6 +11,7 @@ import com.winlator.XServerDisplayActivity
 import com.winlator.box64.Box64Preset
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
+import com.winlator.core.AppUtils
 import com.winlator.core.Callback
 import com.winlator.core.WineThemeManager
 import com.winlator.xenvironment.RootFS
@@ -117,10 +118,21 @@ object WinlatorRuntime {
     private fun mapGameDrive(container: Container, root: File) {
         val drives = container.drivesIterator()
             .filterNot { it.letter.equals("G", true) }
-            .map { it.letter + ":" + it.path + "/" }
+            .map { drive ->
+                val path = when {
+                    drive.letter.equals("E", true) -> AppUtils.INTERNAL_STORAGE
+                    drive.path.startsWith("/data/data/com.winlator/") ->
+                        drive.path.replaceFirst(
+                            "/data/data/com.winlator/",
+                            "/data/data/com.noheroshere.snap/"
+                        )
+                    else -> drive.path
+                }
+                drive.letter + ":" + path.trimEnd('/') + "/"
+            }
             .toMutableList()
 
-        drives.add("G:" + root.canonicalPath + "/")
+        drives.add("G:" + root.canonicalPath.trimEnd('/') + "/")
         container.setDrives(drives.joinToString(""))
     }
 

@@ -1,260 +1,543 @@
-package com.snapix.nhhlauncher 
-import android.content.Context 
-import android.net.Uri 
-import android.os.Bundle 
-import androidx.appcompat.app.AppCompatActivity 
-import androidx.activity.enableEdgeToEdge 
-import androidx.activity.compose.rememberLauncherForActivityResult 
-import androidx.activity.compose.setContent 
-import androidx.activity.result.contract.ActivityResultContracts 
-import androidx.compose.foundation.BorderStroke 
-import androidx.compose.foundation.Image 
-import androidx.compose.foundation.background 
-import androidx.compose.foundation.layout.* 
-import androidx.compose.foundation.lazy.LazyColumn 
-import androidx.compose.foundation.lazy.items 
-import androidx.compose.foundation.rememberScrollState 
-import androidx.compose.foundation.shape.CircleShape 
-import androidx.compose.foundation.shape.RoundedCornerShape 
-import androidx.compose.foundation.verticalScroll 
-import androidx.compose.material.icons.Icons 
-import androidx.compose.material.icons.automirrored.filled.ArrowBack 
-import androidx.compose.material.icons.filled.CheckCircle 
-import androidx.compose.material.icons.filled.DesktopWindows 
-import androidx.compose.material.icons.filled.FolderOpen 
-import androidx.compose.material.icons.filled.Gamepad 
-import androidx.compose.material.icons.filled.PlayArrow 
-import androidx.compose.material.icons.filled.Settings 
-import androidx.compose.material.icons.filled.SportsEsports 
-import androidx.compose.material.icons.filled.Tune 
-import androidx.compose.material3.* 
-import androidx.compose.runtime.* 
-import androidx.compose.ui.Alignment 
-import androidx.compose.ui.Modifier 
-import androidx.compose.ui.draw.clip 
-import androidx.compose.ui.graphics.Brush 
-import androidx.compose.ui.graphics.Color 
-import androidx.compose.ui.layout.ContentScale 
-import androidx.compose.ui.res.painterResource 
-import androidx.compose.ui.text.font.FontWeight 
-import androidx.compose.ui.unit.dp 
-import com.winlator.R 
-import kotlinx.coroutines.Dispatchers 
-import kotlinx.coroutines.launch 
-import kotlinx.coroutines.withContext 
-import java.io.File 
-import java.io.FileOutputStream 
-import java.util.Locale 
-import java.util.zip.ZipInputStream 
-private const val PREFS = "nhh" 
-private const val GAME_DIR = "game" 
-private const val GAME_EXE = "game_exe" 
-private const val PREF_SETUP_IN_PROGRESS = "setup_in_progress" private 
-enum class LauncherScreen { HOME, SETTINGS, CONTROLLER_TEST } private 
-enum class SetupStage(
-val label: String) { EXTRACTING("Extracting the ZIP…"), ANALYSING("Analysing folders and subfolders…"), FOUND("Game executable found"), SELECT_EXE("Select the game executable"), BOOTSTRAP("Installing and setting up Winlator essentials"), FINISHING("Finishing runtime setup…") } 
-class MainActivity : AppCompatActivity() { override 
-fun onCreate(savedInstanceState: Bundle?) { intent.putExtra("nhh_launcher", true) enableEdgeToEdge() super.onCreate(savedInstanceState) WinlatorRuntime.installCrashRecorder(this) setContent { NhhApp(applicationContext, this) } } } 
-private val NhhExpressiveColorScheme = darkColorScheme( primary = Color(0xFFFF6B57), onPrimary = Color(0xFF2B0704), primaryContainer = Color(0xFF6B1E17), onPrimaryContainer = Color(0xFFFFDAD4), secondary = Color(0xFFFFC168), onSecondary = Color(0xFF2B1800), secondaryContainer = Color(0xFF55360A), onSecondaryContainer = Color(0xFFFFDDB0), tertiary = Color(0xFF9CD6A5), onTertiary = Color(0xFF0A3918), background = Color(0xFF140B0B), onBackground = Color(0xFFFCEBE7), surface = Color(0xFF1C1010), onSurface = Color(0xFFFCEBE7), surfaceContainerLowest = Color(0xFF110808), surfaceContainerLow = Color(0xFF211313), surfaceContainer = Color(0xFF291717), surfaceContainerHigh = Color(0xFF341E1E), surfaceContainerHighest = Color(0xFF422727), onSurfaceVariant = Color(0xFFD9C0BA), outline = Color(0xFF8C6B66), outlineVariant = Color(0xFF573B37), error = Color(0xFFFFB4AB) ) @Composable 
-private fun NhhApp(context: Context, activity: MainActivity) { 
-val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) } 
-var gameExe by remember { mutableStateOf(prefs.getString(GAME_EXE, null)) } 
-var error by remember { mutableStateOf<String?>(null) } 
-var currentScreen by remember { mutableStateOf(LauncherScreen.HOME) } 
-var setupStage by remember { mutableStateOf<SetupStage?>(null) } 
-var setupProgress by remember { mutableFloatStateOf(0f) } 
-var setupDetail by remember { mutableStateOf("") } 
-var exeChoices by remember { mutableStateOf<List<String>>(emptyList()) } 
-var runtimeSettings by remember { mutableStateOf(LauncherRuntimeSettings()) } 
-var settingsSaving by remember { mutableStateOf(false) } 
-var settingsFeedback by remember { mutableStateOf<String?>(null) } 
-var settingsError by remember { mutableStateOf<String?>(null) } 
-val scope = rememberCoroutineScope() 
-fun openSettings() { scope.launch { 
-try { runtimeSettings = withContext(Dispatchers.Main) { WinlatorRuntime.loadSettings(activity, prefs) } settingsFeedback = null settingsError = null currentScreen = LauncherScreen.SETTINGS } 
-catch
-catch (t: Throwable) { error = "Could not load runtime settings: ${t.message ?: "unknown error"}" } } } lateinit 
-var picker: androidx.activity.result.ActivityResultLauncher<Array<String>> 
-fun selectZip() { error = null currentScreen = LauncherScreen.HOME picker.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")) } picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? -> 
-if (uri == null) return@rememberLauncherForActivityResult scope.launch { 
-try { setupStage = SetupStage.EXTRACTING setupProgress = 0f setupDetail = "Opening ZIP…" 
-val result = importGameZip( context, uri, onProgress = { stage, progress, detail -> setupStage = stage setupProgress = progress setupDetail = detail }, onNeedsExeSelection = { choices -> exeChoices = choices } ) 
-if (result == null) return@launch prefs.edit() .putString(GAME_EXE, result.absolutePath) .putBoolean(PREF_SETUP_IN_PROGRESS, true) .commit() gameExe = result.absolutePath setupStage = SetupStage.BOOTSTRAP setupProgress = 0.02f setupDetail = "Installing system files and creating the NHH runtime…" WinlatorRuntime.prepare(activity, result, prefs) { progress, detail -> setupProgress = progress setupDetail = detail } prefs.edit().putBoolean(PREF_SETUP_IN_PROGRESS, false).apply() error = null setupStage = null } 
-catch
-catch (t: Throwable) { prefs.edit().putBoolean(PREF_SETUP_IN_PROGRESS, false).apply() setupStage = null error = t.message ?: "Could not import and prepare the game." } } } 
-MaterialTheme(colorScheme = NhhExpressiveColorScheme) { 
-Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { 
-when { setupStage == SetupStage.SELECT_EXE -> ExeSelectionScreen( choices = exeChoices, onSelect = { relativePath -> scope.launch { 
-try { 
-val selected = finalizeSelectedExe(context, relativePath) prefs.edit() .putString(GAME_EXE, selected.absolutePath) .putBoolean(PREF_SETUP_IN_PROGRESS, true) .commit() gameExe = selected.absolutePath setupStage = SetupStage.BOOTSTRAP setupProgress = 0.02f setupDetail = "Installing system files and creating the NHH runtime…" WinlatorRuntime.prepare(activity, selected, prefs) { progress, detail -> setupProgress = progress setupDetail = detail } prefs.edit().putBoolean(PREF_SETUP_IN_PROGRESS, false).apply() setupStage = null error = null } 
-catch
-catch (t: Throwable) { prefs.edit().putBoolean(PREF_SETUP_IN_PROGRESS, false).apply() setupStage = null error = t.message ?: "Could not select the executable." } } }, onCancel = { setupStage = null error = "No game executable was selected." } ) setupStage != null -> SetupProgressScreen( stage = setupStage!!, progress = setupProgress, detail = setupDetail ) currentScreen == LauncherScreen.CONTROLLER_TEST -> ControllerTestScreen( onBack = { currentScreen = LauncherScreen.HOME }, onResetLayout = { WinlatorRuntime.resetControlsLayout(activity) } ) currentScreen == LauncherScreen.SETTINGS -> LauncherSettingsScreen( settings = runtimeSettings, isSaving = settingsSaving, feedback = settingsFeedback, error = settingsError, onChange = { runtimeSettings = it settingsFeedback = null settingsError = null }, onSave = { scope.launch { settingsSaving = true settingsFeedback = null settingsError = null 
-try { withContext(Dispatchers.Main) { WinlatorRuntime.saveSettings(activity, prefs, runtimeSettings) } settingsFeedback = "Saved. Changes apply on next launch." } 
-catch
-catch (t: Throwable) { settingsError = t.message ?: "Could not save runtime settings." } 
-finally
-finally { settingsSaving = false } } }, onBack = { currentScreen = LauncherScreen.HOME }, onRe
-import = { selectZip() }, onResetControls = { WinlatorRuntime.resetControlsLayout(activity) settingsFeedback = "Restored default NHH Xbox on-screen layout." }, onOpenControllerTest = { currentScreen = LauncherScreen.CONTROLLER_TEST }, onShareReport = { WinlatorRuntime.shareLaunchReport(activity) } ) gameExe == null || !File(gameExe!!).isFile -> SetupScreen( error = error, onBack = { activity.finish() }, onSelectZip = { selectZip() } ) 
-else -> MainMenu( gameExeName = File(gameExe!!).name, error = error, onSettings = { openSettings() }, onRun = { scope.launch { 
-try { error = null setupStage = SetupStage.BOOTSTRAP setupProgress = 0f setupDetail = "Verifying Winlator runtime & NHH XInput profile…" WinlatorRuntime.ensureReady( activity, File(gameExe!!), prefs, onProgress = { progress, detail -> setupProgress = progress setupDetail = detail }, forceRebuild = false ) setupStage = null WinlatorRuntime.launchGame(activity, prefs) } 
-catch
-catch (t: Throwable) { setupStage = null error = t.message ?: "Could not launch NHH." } } }, onEditControls = { scope.launch { 
-try { error = null WinlatorRuntime.openControlsEditor(activity) } 
-catch
-catch (t: Throwable) { error = t.message ?: "Could not open the controls editor." } } }, onTestController = { currentScreen = LauncherScreen.CONTROLLER_TEST }, onEnterDesktop = { scope.launch { 
-try { error = null setupStage = SetupStage.BOOTSTRAP setupProgress = 0f setupDetail = "Preparing Winlator desktop environment…" WinlatorRuntime.ensureReady( activity, File(gameExe!!), prefs, onProgress = { progress, detail -> setupProgress = progress setupDetail = detail }, forceRebuild = false ) setupStage = null WinlatorRuntime.enterDesktop(activity, prefs) } 
-catch
-catch (t: Throwable) { setupStage = null error = t.message ?: "Could not open container desktop." } } } ) } } } } @Composable 
-private fun MainMenu( gameExeName: String, error: String?, onSettings: () -> Unit, onRun: () -> Unit, onEditControls: () -> Unit, onTestController: () -> Unit, onEnterDesktop: () -> Unit ) { 
-Column( modifier = Modifier .fillMaxSize() .statusBarsPadding() .navigationBarsPadding() .verticalScroll(rememberScrollState()) .padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp) ) { // Expressive Top Header 
-Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Image( painter = painterResource(R.drawable.nhh_logo), contentDescription = "No Heroes Here", modifier = Modifier.size(54.dp).clip(RoundedCornerShape(18.dp)), contentScale = ContentScale.Crop ) 
-Spacer(Modifier.width(14.dp)) 
-Column(Modifier.weight(1f)) { 
-Text( "No Heroes Here", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold ) 
-Text( "XInput Ready • $gameExeName", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant ) } FilledTonalIcon
-Button( onClick = onSettings, modifier = Modifier.size(48.dp) ) { 
-Icon(Icons.Default.Settings, contentDescription = "Settings") } } // Expressive Hero Banner Card 
-Box( modifier = Modifier .fillMaxWidth() .height(210.dp) .clip(RoundedCornerShape(28.dp)) ) { Image( painter = painterResource(R.drawable.nhh_banner), contentDescription = "No Heroes Here", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop ) 
-Box( modifier = Modifier .fillMaxSize() .background( Brush.verticalGradient( colors = listOf(Color.Transparent, Color(0xCC140B0B)), startY = 120f ) ) ) 
-Row( modifier = Modifier .align(Alignment.BottomStart) .padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp) ) { 
-Surface( shape = CircleShape, color = Color(0xE6225E30) ) { 
-Row( Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically ) { 
-Icon( Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFFB7F5C4), modifier = Modifier.size(16.dp) ) 
-Spacer(Modifier.width(6.dp)) 
-Text( "READY", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB7F5C4), fontWeight = FontWeight.Bold ) } } 
-Surface( shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f) ) { 
-Text( "Xbox Layout Loaded", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface ) } } } // Primary Expressive Pill CTA: RUN GAME 
-Button( onClick = onRun, modifier = Modifier.fillMaxWidth().height(68.dp), shape = RoundedCornerShape(32.dp), elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp) ) { 
-Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(28.dp)) 
-Spacer(Modifier.width(10.dp)) 
-Text( "RUN GAME", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold ) } // Split Secondary Expressive Actions: Edit Controls & Controller Test Mode 
-Row( Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp) ) { 
-FilledTonalButton( onClick = onEditControls, modifier = Modifier.weight(1f).height(58.dp), shape = RoundedCornerShape(22.dp) ) { 
-Icon(Icons.Default.Gamepad, contentDescription = null) 
-Spacer(Modifier.width(8.dp)) 
-Text("Edit Layout", fontWeight = FontWeight.Bold) } 
-FilledTonalButton( onClick = onTestController, modifier = Modifier.weight(1f).height(58.dp), shape = RoundedCornerShape(22.dp) ) { 
-Icon(Icons.Default.SportsEsports, contentDescription = null) 
-Spacer(Modifier.width(8.dp)) 
-Text("Test Pad", fontWeight = FontWeight.Bold) } } // Dedicated ENTER DESKTOP Button (install additional drivers, Mono, VC++, etc.) 
-OutlinedButton( onClick = onEnterDesktop, modifier = Modifier.fillMaxWidth().height(58.dp), shape = RoundedCornerShape(22.dp), border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.secondary) ) { 
-Icon( Icons.Default.DesktopWindows, contentDescription = null, tint = MaterialTheme.colorScheme.secondary ) 
-Spacer(Modifier.width(10.dp)) 
-Text( "ENTER DESKTOP", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold ) } // Pre-loaded NHH Xbox Control Quick Reference Card 
-ElevatedCard( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.elevatedCardColors( containerColor = MaterialTheme.colorScheme.surfaceContainer ) ) { 
-Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { 
-Row(verticalAlignment = Alignment.CenterVertically) { 
-Icon( Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp) ) 
-Spacer(Modifier.width(8.dp)) 
-Text( "NHH XBOX CONTROLS (PRE-LOADED)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary ) } ControlHint
-Row("L-Stick / D-Pad", "Move, climb ladders & menus") ControlHint
-Row("A / B", "Jump (Confirm) • Throw (Back)") ControlHint
-Row("X / Y", "Interact / Work • Dash / Sprint") ControlHint
-Row("RB / RT", "Fire cannon / Quick-throw") ControlHint
-Row("LB / LT", "Switch character (Solo 2P)") ControlHint
-Row("Menu (Start)", "Pause / Controller settings") } } 
-if (!error.isNullOrBlank()) { 
-Card( modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer) ) { 
-Text( error, modifier = Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer ) } } } } @Composable 
-private fun ControlHint
-Row(button: String, action: String) { 
-Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { 
-Text( button, modifier = Modifier.width(126.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary ) 
-Text( action, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant ) } } @Composable 
-private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: String) { 
-Column( Modifier .fillMaxSize() .statusBarsPadding() .navigationBarsPadding() .padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp) ) { 
-Text("Setting up No Heroes Here", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) Image( painterResource(R.drawable.nhh_banner), null, Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(24.dp)), contentScale = ContentScale.Crop ) 
-ElevatedCard( Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer) ) { 
-Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { 
-Text( 
-if (stage == SetupStage.BOOTSTRAP || stage == SetupStage.FINISHING) "Preparing Winlator Runtime" 
-else "Installing Game Files", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold ) 
-Text(detail.ifBlank { stage.label }, color = MaterialTheme.colorScheme.onSurfaceVariant) 
-LinearProgressIndicator( progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape) ) 
-Text( "${(progress.coerceIn(0f, 1f) * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold ) } } } } @Composable 
-private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> Unit) { 
-Column( Modifier .fillMaxSize() .statusBarsPadding() .navigationBarsPadding() .padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp) ) { 
-Row(verticalAlignment = Alignment.CenterVertically) { Icon
-Button(onClick = onBack) { 
-Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } 
-Text("No Heroes Here Setup", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) } Image( painterResource(R.drawable.nhh_banner), null, Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(26.dp)), contentScale = ContentScale.Crop ) 
-ElevatedCard( Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer) ) { 
-Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { 
-Text("Import Game Archive", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) 
-Text( "Select your No Heroes Here ZIP. The launcher will extract it, bootstrap Winlator, and pre-load the Xbox controller layout automatically.", color = MaterialTheme.colorScheme.onSurfaceVariant ) 
-Button( onClick = onSelectZip, modifier = Modifier.fillMaxWidth().height(58.dp), shape = RoundedCornerShape(28.dp) ) { 
-Icon(Icons.Default.FolderOpen, null) 
-Spacer(Modifier.width(8.dp)) 
-Text("SELECT GAME ZIP", fontWeight = FontWeight.Bold) } 
-if (!error.isNullOrBlank()) 
-Text(error, color = MaterialTheme.colorScheme.error) } } } } 
-private suspend fun importGameZip( context: Context, uri: Uri, onProgress: suspend (SetupStage, Float, String) -> Unit, onNeedsExeSelection: (List<String>) -> Unit ): File? = withContext(Dispatchers.IO) { 
-val stagingDir = File(context.filesDir, "$GAME_DIR.staging") 
-if (stagingDir.exists()) stagingDir.deleteRecursively() stagingDir.mkdirs() 
-suspend fun progress(stage: SetupStage, value: Float, detail: String = "") { withContext(Dispatchers.Main.immediate) { onProgress(stage, value, detail) } } 
-try { progress(SetupStage.EXTRACTING, 0f, "Opening ZIP…") 
-var totalKnownBytes = 0L 
-var extractedBytes = 0L 
-var lastUiUpdateNanos = 0L 
-var lastUiBytes = 0L 
-val input = withContext(Dispatchers.Main.immediate) { context.contentResolver.openInputStream(uri) } ?: 
-throw IllegalArgumentException("Could not read the selected ZIP.") input.use { ZipInputStream(it.buffered(1024 * 1024)).use { zip -> 
-val root = stagingDir.canonicalFile 
-val buffer = ByteArray(1024 * 1024) 
-var entry = zip.nextEntry 
-while (entry != null) { 
-val entryName = entry.name 
-val target = File(stagingDir, entryName).canonicalFile 
-if (!target.path.startsWith(root.path + File.separator) && target != root) { 
-throw IllegalArgumentException("Invalid ZIP path.") } 
-if (entry.isDirectory) { target.mkdirs() } 
-else
-else { target.parentFile?.mkdirs() FileOutputStream(target, false).buffered(1024 * 1024).use { output -> 
-while (true) { 
-val read = zip.read(buffer) 
-if (read < 0) break output.write(buffer, 0, read) extractedBytes += read } } 
-if (entry.size > 0) totalKnownBytes += entry.size } 
-val now = System.nanoTime() 
-if (now - lastUiUpdateNanos >= 120_000_000L || extractedBytes - lastUiBytes >= 4L * 1024 * 1024L) { lastUiUpdateNanos = now lastUiBytes = extractedBytes 
-val fraction = 
-if (totalKnownBytes > 0L) { (extractedBytes.toDouble() / totalKnownBytes.toDouble()).toFloat().coerceIn(0f, 1f) } 
-else
-else 0f progress(SetupStage.EXTRACTING, fraction, "${formatBytes(extractedBytes)} • $entryName") } zip.closeEntry() entry = zip.nextEntry } } } progress(SetupStage.EXTRACTING, 1f, "Extraction complete") progress(SetupStage.ANALYSING, 0f, "Searching folders and subfolders…") 
-val executables = stagingDir.walkTopDown().filter { it.isFile && it.extension.equals("exe", ignoreCase = true) }.toList() 
-val preferred = executables.firstOrNull { it.name.lowercase(Locale.ROOT) == "nhh.exe" } ?: executables.firstOrNull { it.name.lowercase(Locale.ROOT) == "nhh_build.exe" } progress(SetupStage.ANALYSING, 1f, "${executables.size} executable(s) found") 
-if (preferred == null) { 
-if (executables.isEmpty()) { 
-throw IllegalArgumentException("No .exe file was found in the extracted game files.") } withContext(Dispatchers.Main.immediate) { onNeedsExeSelection(executables.map { it.relativeTo(stagingDir).path }) } progress(SetupStage.SELECT_EXE, 1f, "Choose the game executable") return@withContext null } progress(SetupStage.FOUND, 1f, "${preferred.name} found") finalizeGameInstall(context, preferred.relativeTo(stagingDir).path) } 
-catch
-catch (t: Throwable) { stagingDir.deleteRecursively() 
-throw t } } 
-private fun formatBytes(bytes: Long): String { 
-val mb = bytes / (1024.0 * 1024.0) 
-return 
-if (mb < 1024.0) String.format(Locale.US, "%.1f MB", mb) 
-else String.format(Locale.US, "%.2f GB", mb / 1024.0) } 
-private suspend fun finalizeSelectedExe(context: Context, relativePath: String): File = withContext(Dispatchers.IO) { finalizeGameInstall(context, relativePath) } 
-private fun finalizeGameInstall(context: Context, relativePath: String): File { 
-val stagingDir = File(context.filesDir, "$GAME_DIR.staging") 
-val gameDir = File(context.filesDir, GAME_DIR) 
-val selected = File(stagingDir, relativePath).canonicalFile 
-val root = stagingDir.canonicalFile 
-if (!selected.path.startsWith(root.path + File.separator) || !selected.isFile) { 
-throw IllegalArgumentException("Invalid executable selection.") } 
-if (gameDir.exists()) gameDir.deleteRecursively() 
-if (!stagingDir.renameTo(gameDir)) { 
-throw IllegalStateException("Could not finalize the extracted game files.") } 
-return File(gameDir, relativePath).takeIf { it.isFile } ?: 
-throw IllegalStateException("The selected executable disappeared while finalizing the install.") } @Composable 
-private fun ExeSelectionScreen(choices: List<String>, onSelect: (String) -> Unit, onCancel: () -> Unit) { 
-Column( Modifier .fillMaxSize() .statusBarsPadding() .navigationBarsPadding() .padding(24.dp) ) { 
-Text("Select game executable", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) 
-Spacer(Modifier.height(8.dp)) 
-Text( "NHH.exe or NHH_build.exe was not found automatically. Select the correct .exe below.", color = MaterialTheme.colorScheme.onSurfaceVariant ) 
-Spacer(Modifier.height(18.dp)) Lazy
-Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(choices) { path -> 
-FilledTonalButton( onClick = { onSelect(path) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp) ) { 
-Text(path) } } } 
-Spacer(Modifier.height(12.dp)) Text
-Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { 
-Text("CANCEL") } } }
+package com.snapix.nhhlauncher
+
+import android.content.Context
+import android.net.Uri
+import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.DesktopWindows
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.winlator.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipInputStream
+
+private const val PREFS = "nhh"
+private const val GAME_DIR = "game"
+private const val GAME_EXE = "game_exe"
+
+private enum class LauncherScreen { HOME, SETTINGS, CONTROLLER_TEST }
+private enum class SetupStage(val label: String) {
+    EXTRACTING("Extracting game files…"),
+    ANALYSING("Finding game executable…"),
+    FOUND("Game executable found"),
+    SELECT_EXE("Select executable"),
+    BOOTSTRAP("Preparing Winlator runtime…")
+}
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        WinlatorRuntime.installCrashRecorder(this)
+        setContent { NhhApp(this) }
+    }
+}
+
+private val NhhColors = darkColorScheme(
+    primary = Color(0xFFFF6B57),
+    secondary = Color(0xFFFFC168),
+    tertiary = Color(0xFF9CD6A5),
+    background = Color(0xFF140B0B),
+    surface = Color(0xFF1C1010),
+    surfaceContainer = Color(0xFF291717),
+    surfaceContainerHigh = Color(0xFF341E1E),
+    onBackground = Color(0xFFFCEBE7),
+    onSurface = Color(0xFFFCEBE7),
+    onSurfaceVariant = Color(0xFFD9C0BA)
+)
+
+@Composable
+private fun NhhApp(activity: MainActivity) {
+    val context = activity.applicationContext
+    val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+    val scope = rememberCoroutineScope()
+
+    var gameExe by remember { mutableStateOf(prefs.getString(GAME_EXE, null)) }
+    var screen by remember { mutableStateOf(LauncherScreen.HOME) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var setupStage by remember { mutableStateOf<SetupStage?>(null) }
+    var setupProgress by remember { mutableFloatStateOf(0f) }
+    var setupDetail by remember { mutableStateOf("") }
+    var exeChoices by remember { mutableStateOf<List<String>>(emptyList()) }
+    var settings by remember { mutableStateOf(LauncherRuntimeSettings()) }
+    var saving by remember { mutableStateOf(false) }
+    var settingsFeedback by remember { mutableStateOf<String?>(null) }
+    var settingsError by remember { mutableStateOf<String?>(null) }
+
+    fun beginSetup(file: File) {
+        scope.launch {
+            try {
+                setupStage = SetupStage.BOOTSTRAP
+                setupProgress = 0f
+                setupDetail = "Preparing Winlator runtime…"
+                WinlatorRuntime.ensureReady(activity, file, prefs, { p, d ->
+                    setupProgress = p
+                    setupDetail = d
+                }, false)
+                prefs.edit().putString(GAME_EXE, file.absolutePath).apply()
+                gameExe = file.absolutePath
+                setupStage = null
+                error = null
+            } catch (t: Throwable) {
+                setupStage = null
+                error = t.message ?: "Runtime preparation failed."
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            try {
+                val result = importGameZip(context, uri,
+                    { stage, p, d ->
+                        setupStage = stage
+                        setupProgress = p
+                        setupDetail = d
+                    },
+                    { exeChoices = it }
+                )
+                if (result != null) beginSetup(result)
+            } catch (t: Throwable) {
+                setupStage = null
+                error = t.message ?: "Could not import the game ZIP."
+            }
+        }
+    }
+
+    MaterialTheme(colorScheme = NhhColors) {
+        Surface(Modifier.fillMaxSize()) {
+            when {
+                setupStage == SetupStage.SELECT_EXE -> ExeSelectionScreen(
+                    exeChoices,
+                    { relative ->
+                        scope.launch {
+                            try {
+                                beginSetup(finalizeSelectedExe(context, relative))
+                            } catch (t: Throwable) {
+                                setupStage = null
+                                error = t.message ?: "Could not select executable."
+                            }
+                        }
+                    },
+                    {
+                        setupStage = null
+                        error = "No executable was selected."
+                    }
+                )
+
+                setupStage != null -> SetupProgressScreen(setupStage!!, setupProgress, setupDetail)
+
+                screen == LauncherScreen.SETTINGS -> LauncherSettingsScreen(
+                    settings = settings,
+                    isSaving = saving,
+                    feedback = settingsFeedback,
+                    error = settingsError,
+                    onChange = {
+                        settings = it
+                        settingsFeedback = null
+                        settingsError = null
+                    },
+                    onSave = {
+                        scope.launch {
+                            saving = true
+                            try {
+                                WinlatorRuntime.saveSettings(context, prefs, settings)
+                                settingsFeedback = "Settings saved. Restart the game to apply runtime changes."
+                            } catch (t: Throwable) {
+                                settingsError = t.message ?: "Could not save settings."
+                            } finally {
+                                saving = false
+                            }
+                        }
+                    },
+                    onBack = { screen = LauncherScreen.HOME },
+                    onReimport = { picker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                    onResetControls = {
+                        WinlatorRuntime.resetControlsLayout(context)
+                        settingsFeedback = "NHH Xbox layout restored."
+                    },
+                    onOpenControllerTest = { screen = LauncherScreen.CONTROLLER_TEST },
+                    onShareReport = { WinlatorRuntime.shareLaunchReport(activity) }
+                )
+
+                screen == LauncherScreen.CONTROLLER_TEST -> ControllerTestScreen(
+                    onBack = { screen = LauncherScreen.HOME },
+                    onResetLayout = { WinlatorRuntime.resetControlsLayout(context) }
+                )
+
+                gameExe == null || !File(gameExe!!).isFile -> SetupScreen(
+                    error,
+                    { finish() },
+                    { picker.launch(arrayOf("application/zip", "application/octet-stream")) }
+                )
+
+                else -> MainMenu(
+                    File(gameExe!!).name,
+                    error,
+                    onSettings = {
+                        scope.launch {
+                            try {
+                                settings = WinlatorRuntime.loadSettings(context, prefs)
+                                settingsError = null
+                                settingsFeedback = null
+                                screen = LauncherScreen.SETTINGS
+                            } catch (t: Throwable) {
+                                error = t.message ?: "Could not load settings."
+                            }
+                        }
+                    },
+                    onRun = {
+                        scope.launch {
+                            try {
+                                setupStage = SetupStage.BOOTSTRAP
+                                WinlatorRuntime.ensureReady(
+                                    activity, File(gameExe!!), prefs,
+                                    { p, d -> setupProgress = p; setupDetail = d }, false
+                                )
+                                setupStage = null
+                                WinlatorRuntime.launchGame(activity, prefs)
+                            } catch (t: Throwable) {
+                                setupStage = null
+                                error = t.message ?: "Could not launch game."
+                            }
+                        }
+                    },
+                    onEditControls = {
+                        try {
+                            WinlatorRuntime.openControlsEditor(activity)
+                        } catch (t: Throwable) {
+                            error = t.message ?: "Could not open controls editor."
+                        }
+                    },
+                    onTestController = { screen = LauncherScreen.CONTROLLER_TEST },
+                    onEnterDesktop = {
+                        scope.launch {
+                            try {
+                                setupStage = SetupStage.BOOTSTRAP
+                                WinlatorRuntime.ensureReady(
+                                    activity, File(gameExe!!), prefs,
+                                    { p, d -> setupProgress = p; setupDetail = d }, false
+                                )
+                                setupStage = null
+                                WinlatorRuntime.enterDesktop(activity, prefs)
+                            } catch (t: Throwable) {
+                                setupStage = null
+                                error = t.message ?: "Could not enter desktop mode."
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MainMenu(
+    gameName: String,
+    error: String?,
+    onSettings: () -> Unit,
+    onRun: () -> Unit,
+    onEditControls: () -> Unit,
+    onTestController: () -> Unit,
+    onEnterDesktop: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painterResource(R.drawable.nhh_logo),
+                "NHH",
+                Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("No Heroes Here", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                Text(gameName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onSettings) {
+                Icon(Icons.Default.Settings, "Settings")
+            }
+        }
+
+        Box(Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(24.dp))) {
+            Image(
+                painterResource(R.drawable.nhh_banner),
+                "No Heroes Here",
+                Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color(0xDD140B0B)))
+                )
+            )
+            Text(
+                "NHH XBOX CONTROLLER READY",
+                Modifier.align(Alignment.BottomStart).padding(16.dp),
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+
+        Button(
+            onClick = onRun,
+            modifier = Modifier.fillMaxWidth().height(64.dp),
+            shape = RoundedCornerShape(30.dp)
+        ) {
+            Icon(Icons.Default.PlayArrow, null)
+            Spacer(Modifier.width(8.dp))
+            Text("RUN GAME", fontWeight = FontWeight.ExtraBold)
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FilledTonalButton(onClick = onEditControls, modifier = Modifier.weight(1f).height(56.dp)) {
+                Icon(Icons.Default.Gamepad, null)
+                Spacer(Modifier.width(6.dp))
+                Text("EDIT LAYOUT")
+            }
+            FilledTonalButton(onClick = onTestController, modifier = Modifier.weight(1f).height(56.dp)) {
+                Icon(Icons.Default.Tune, null)
+                Spacer(Modifier.width(6.dp))
+                Text("TEST PAD")
+            }
+        }
+
+        OutlinedButton(
+            onClick = onEnterDesktop,
+            modifier = Modifier.fillMaxWidth().height(58.dp),
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.secondary)
+        ) {
+            Icon(Icons.Default.DesktopWindows, null, tint = MaterialTheme.colorScheme.secondary)
+            Spacer(Modifier.width(8.dp))
+            Text("ENTER DESKTOP", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+        }
+
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("NHH XBOX CONTROL MAP", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("Left Stick / D-Pad  — Move and menus")
+                Text("A / B  — Confirm / Back")
+                Text("X / Y  — Interact / Dash")
+                Text("LB / LT  — Switch")
+                Text("RB / RT  — Combat")
+                Text("Menu  — Pause")
+            }
+        }
+
+        if (!error.isNullOrBlank()) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                Text(error, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+            Text("NHH Launcher Setup", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        }
+        Image(
+            painterResource(R.drawable.nhh_banner),
+            null,
+            Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(24.dp)),
+            contentScale = ContentScale.Crop
+        )
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Import Game ZIP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "Extract the game, create its Winlator container, map the game as G:, and preload the NHH Xbox control profile.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(onClick = onSelectZip, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                    Icon(Icons.Default.FolderOpen, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("SELECT GAME ZIP")
+                }
+                if (!error.isNullOrBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupProgressScreen(stage: SetupStage, progress: Float, detail: String) {
+    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Preparing NHH", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stage.label, style = MaterialTheme.typography.titleMedium)
+        Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LinearProgressIndicator(
+            progress = { progress.coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text((progress.coerceIn(0f, 1f) * 100f).toInt().toString() + "%")
+    }
+}
+
+@Composable
+private fun ExeSelectionScreen(
+    choices: List<String>,
+    onSelect: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().padding(20.dp)) {
+        Text("Select Game Executable", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(
+            "NHH.exe was not found automatically. Select the executable that starts the game.",
+            Modifier.padding(top = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        LazyColumn(
+            Modifier.weight(1f).padding(top = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(choices) { path ->
+                FilledTonalButton(onClick = { onSelect(path) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(path)
+                }
+            }
+        }
+        Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("CANCEL") }
+    }
+}
+
+private suspend fun importGameZip(
+    context: Context,
+    uri: Uri,
+    onProgress: suspend (SetupStage, Float, String) -> Unit,
+    onNeedsSelection: (List<String>) -> Unit
+): File? = withContext(Dispatchers.IO) {
+    val staging = File(context.filesDir, GAME_DIR + ".staging")
+    if (staging.exists()) staging.deleteRecursively()
+    staging.mkdirs()
+
+    suspend fun progress(stage: SetupStage, value: Float, detail: String) {
+        withContext(Dispatchers.Main.immediate) { onProgress(stage, value, detail) }
+    }
+
+    try {
+        progress(SetupStage.EXTRACTING, 0f, "Opening ZIP…")
+        var total = 0L
+        var done = 0L
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("Could not read the ZIP.")
+
+        input.use { raw ->
+            ZipInputStream(raw.buffered(1024 * 1024)).use { zip ->
+                val buffer = ByteArray(1024 * 1024)
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val target = File(staging, entry.name).canonicalFile
+                    val root = staging.canonicalFile
+                    if (!target.path.startsWith(root.path + File.separator) && target != root) {
+                        throw IllegalArgumentException("ZIP contains an unsafe path.")
+                    }
+
+                    if (entry.isDirectory) {
+                        target.mkdirs()
+                    } else {
+                        target.parentFile?.mkdirs()
+                        FileOutputStream(target).buffered(1024 * 1024).use { out ->
+                            while (true) {
+                                val n = zip.read(buffer)
+                                if (n < 0) break
+                                out.write(buffer, 0, n)
+                                done += n
+                            }
+                        }
+                        if (entry.size > 0) total += entry.size
+                    }
+
+                    progress(
+                        SetupStage.EXTRACTING,
+                        if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f,
+                        entry.name
+                    )
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+        }
+
+        val executables = staging.walkTopDown()
+            .filter { it.isFile && it.extension.equals("exe", true) }
+            .map { it.relativeTo(staging).path }
+            .toList()
+
+        val preferred = executables.firstOrNull { File(it).name.equals("NHH.exe", true) }
+            ?: executables.firstOrNull { File(it).name.equals("NHH_build.exe", true) }
+
+        if (preferred == null) {
+            if (executables.isEmpty()) {
+                throw IllegalArgumentException("No .exe file was found in the ZIP.")
+            }
+            onNeedsSelection(executables)
+            withContext(Dispatchers.Main.immediate) {
+                onProgress(SetupStage.SELECT_EXE, 1f, "Choose the game executable")
+            }
+            return@withContext null
+        }
+
+        progress(SetupStage.FOUND, 1f, File(preferred).name)
+        finalizeGameInstall(context, preferred)
+    } catch (t: Throwable) {
+        staging.deleteRecursively()
+        throw t
+    }
+}
+
+private suspend fun finalizeSelectedExe(context: Context, relativePath: String): File =
+    withContext(Dispatchers.IO) { finalizeGameInstall(context, relativePath) }
+
+private fun finalizeGameInstall(context: Context, relativePath: String): File {
+    val staging = File(context.filesDir, GAME_DIR + ".staging").canonicalFile
+    val target = File(staging, relativePath).canonicalFile
+    if (!target.isFile || !target.path.startsWith(staging.path + File.separator)) {
+        throw IllegalArgumentException("Invalid executable selection.")
+    }
+    val gameDir = File(context.filesDir, GAME_DIR)
+    if (gameDir.exists()) gameDir.deleteRecursively()
+    if (!staging.renameTo(gameDir)) {
+        throw IllegalStateException("Could not finalize game installation.")
+    }
+    return File(gameDir, relativePath).canonicalFile
+}

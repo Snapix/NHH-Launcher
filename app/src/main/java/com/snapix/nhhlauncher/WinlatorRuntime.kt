@@ -1,134 +1,347 @@
 package com.snapix.nhhlauncher
+
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.util.Log
+import com.winlator.ControlsEditorActivity
 import com.winlator.XServerDisplayActivity
 import com.winlator.box64.Box64Preset
-import com.winlator.container.AudioDrivers
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
-import com.winlator.container.DXWrappers
-import com.winlator.container.GraphicsDrivers
+import com.winlator.core.Callback
 import com.winlator.core.WineThemeManager
 import com.winlator.xenvironment.RootFS
 import com.winlator.xenvironment.RootFSInstaller
+import com.winlator.container.GraphicsDrivers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.File
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 data class LauncherRuntimeSettings(
- val resolution:String="1280x720",val vulkanDriver:String=GraphicsDrivers.DEFAULT_VULKAN_DRIVER,val openGlDriver:String=GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
- val dxWrapper:String=DXWrappers.DXVK,val audioDriver:String=AudioDrivers.ALSA,val box64Preset:String=Box64Preset.DEFAULT,val wineEsync:Boolean=true,
- val showFpsHud:Boolean=false,val forceFullscreen:Boolean=true,val onScreenControls:Boolean=true,val preferredInputApi:String="XINPUT",
- val overlayOpacity:Float=.55f,val controlScale:Float=1f,val stickDeadzone:Float=.12f)
+    val resolution: String = Container.DEFAULT_SCREEN_SIZE,
+    val vulkanDriver: String = GraphicsDrivers.DEFAULT_VULKAN_DRIVER,
+    val openGlDriver: String = GraphicsDrivers.DEFAULT_OPENGL_DRIVER,
+    val dxWrapper: String = Container.DEFAULT_DXWRAPPER,
+    val audioDriver: String = Container.DEFAULT_AUDIO_DRIVER,
+    val box64Preset: String = Box64Preset.DEFAULT,
+    val wineEsync: Boolean = true,
+    val showFpsHud: Boolean = false,
+    val forceFullscreen: Boolean = true,
+    val onScreenControls: Boolean = true,
+    val preferredInputApi: String = "XINPUT",
+    val overlayOpacity: Float = 0.55f,
+    val controlScale: Float = 1f,
+    val stickDeadzone: Float = 0.12f
+)
 
 object WinlatorRuntime {
- const val PREF_CONTAINER_ID="winlator_container_id"
- private const val PREF_GAME_PATH="game_exe"
- private const val PREF_PROFILE="nhh_controls_profile_id"
- private const val PREF_FULLSCREEN="nhh_force_fullscreen"
- private const val NAME="NHH"
- private val lock=Mutex()
- private val rootVersion=RootFSInstaller.LATEST_VERSION.toInt()
- private var crashInstalled=false
+    const val PREF_CONTAINER_ID = "winlator_container_id"
+    private const val PREF_GAME_PATH = "game_exe"
+    private const val PREF_PROFILE = "nhh_controls_profile_id"
+    private const val PREF_FULLSCREEN = "nhh_force_fullscreen"
+    private const val CONTAINER_NAME = "NHH"
 
- fun installCrashRecorder(context:Context){if(crashInstalled)return;synchronized(this){if(crashInstalled)return
-  val app=context.applicationContext
-  val old=Thread.getDefaultUncaughtExceptionHandler()
-  Thread.setDefaultUncaughtExceptionHandler{thread,t->NhhControllerRuntime.detachFromSession();appendLaunchLog(app,"UNCAUGHT "+thread.name+":\n"+Log.getStackTraceString(t));old?.uncaughtException(thread,t)}
-  crashInstalled=true}}
+    fun installCrashRecorder(context: Context) {
+        val app = context.applicationContext
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            NhhControllerRuntime.detachFromSession()
+            appendLaunchLog(app, "UNCAUGHT " + thread.name + ": " + Log.getStackTraceString(throwable))
+            previous?.uncaughtException(thread, throwable)
+        }
+    }
 
- suspend fun prepare(a:MainActivity,e:File,p:SharedPreferences,cb:(Float,String)->Unit)=ensureReady(a,e,p,cb)
+    suspend fun ensureReady(
+        activity: MainActivity,
+        executable: File,
+        prefs: SharedPreferences,
+        onProgress: (Float, String) -> Unit,
+        forceRebuild: Boolean
+    ) {
+        val root = File(activity.filesDir, "game").canonicalFile
+        val exe = executable.canonicalFile
+        require(exe.isFile) { "The selected executable no longer exists." }
+        require(exe.path.startsWith(root.path + File.separator)) {
+            "The executable is outside the NHH game directory."
+        }
 
- suspend fun ensureReady(a:MainActivity,e:File,p:SharedPreferences,cb:(Float,String)->Unit,forceRebuild:Boolean=false)=lock.withLock{
-  val rootDir=File(a.filesDir,"game").canonicalFile
-  val exe=e.canonicalFile
-  require(exe.isFile){"The selected executable no longer exists."}
-  require(exe.path.startsWith(rootDir.path+File.separator)){"The executable is outside the game folder."}
-  var r=RootFS.find(a)
-  if(!r.isValid()||r.getVersion()<rootVersion){
-   cb(.02f,"Installing system files…");RootFSInstaller.installIfNeeded(a);var waited=0L
-   while(true){delay(300);waited+=300;r=RootFS.find(a);val x=RootFSInstaller.getNhhInstallProgress()
-    if(r.isValid()&&r.getVersion()>=rootVersion)break
-    if(x<0)throw IllegalStateException("Winlator system-file installation failed.")
-    if(waited>900000)throw IllegalStateException("Winlator bootstrap timed out.")
-    cb(if(x>0)(x/100f).coerceIn(.02f,.38f)else .02f,if(x>0)"Installing system files… "+x+"%" else "Installing system files…")}}
-  cb(.4f,"Preparing NHH Xbox controller profile…")
-  val profile=NhhControllerRuntime.ensureNhhProfile(a)
-  val m=ContainerManager(a);val oldId=p.getInt(PREF_CONTAINER_ID,0);val old=if(oldId>0)m.getContainerById(oldId)else null
-  if(!forceRebuild&&old!=null){mapGameDrive(old,rootDir);old.saveData();p.edit().putString(PREF_GAME_PATH,exe.absolutePath).putInt(PREF_PROFILE,profile.id).apply();cb(1f,"Winlator container verified.");return@withLock}
-  cb(.55f,"Creating the NHH Winlator container…")
-  val c=createContainer(m,a);mapGameDrive(c,rootDir);c.saveData()
-  p.edit().putInt(PREF_CONTAINER_ID,c.id).putString(PREF_GAME_PATH,exe.absolutePath).putInt(PREF_PROFILE,profile.id).apply()
-  if(old!=null)m.removeContainerAsync(old){}
-  cb(1f,"Winlator container created. NHH is ready to launch.")
- }
+        var rootFs = RootFS.find(activity)
+        val latest = RootFSInstaller.LATEST_VERSION.toInt()
 
- private fun mapGameDrive(c:Container,root:File){
-  val x=c.drivesIterator().filterNot{it.letter.equals("G",true)}.map{it.letter+":"+it.path}.toMutableList()
-  x.add("G:"+root.canonicalPath);c.setDrives(x.joinToString(""))
- }
+        if (!rootFs.isValid() || rootFs.getVersion() < latest) {
+            onProgress(0.02f, "Installing Winlator system files…")
+            RootFSInstaller.installIfNeeded(activity)
 
- private suspend fun createContainer(m:Container,ctx:Context):Container=suspendCancellableCoroutine{co->
-  val d=JSONObject().apply{
-   put("name",NAME);put("screenSize",Container.DEFAULT_SCREEN_SIZE);put("envVars",Container.DEFAULT_ENV_VARS)
-   put("cpuList","");put("cpuListWoW64","");put("graphicsDriver",GraphicsDrivers.getDefaultDriver(ctx))
-   put("dxwrapper",Container.DEFAULT_DXWRAPPER);put("audioDriver",Container.DEFAULT_AUDIO_DRIVER)
-   put("wincomponents",Container.DEFAULT_WINCOMPONENTS);put("drives",Container.DEFAULT_DRIVES);put("hudMode",0)
-   put("startupSelection",Container.STARTUP_SELECTION_ESSENTIAL);put("box64Preset",Box64Preset.DEFAULT);put("desktopTheme",WineThemeManager.DEFAULT_DESKTOP_THEME)
-  }
-  m.createContainerAsync(d){c->if(c!=null){if(co.isActive)co.resume(c)}else if(co.isActive)co.cancel(IllegalStateException("Winlator could not create the NHH container."))}
- }
+            var waited = 0L
+            while (true) {
+                delay(300)
+                waited += 300
+                rootFs = RootFS.find(activity)
+                val progress = RootFSInstaller.getNhhInstallProgress()
 
- fun openControlsEditor(a:MainActivity){val p=NhhControllerRuntime.ensureNhhProfile(a);a.startActivity(Intent(a,com.winlator.ControlsEditorActivity::class.java).apply{putExtra("profile_id",p.id);putExtra("nhh_editor_safe_area",true)})}
- fun resetControlsLayout(c:Context){NhhControllerRuntime.resetNhhProfile(c);appendLaunchLog(c,"Restored NHH Xbox layout.")}
- fun enterDesktop(a:MainActivity,p:SharedPreferences){
-  val id=p.getInt(PREF_CONTAINER_ID,0);require(id>0){"The NHH container has not been created yet."}
-  require(ContainerManager(a).getContainerById(id)!=null){"The NHH container is missing. Re-import the game ZIP."}
-  appendLaunchLog(a,"Entering NHH Container Desktop Mode. Container="+id)
-  a.startActivity(Intent(a,XServerDisplayActivity::class.java).apply{putExtra("container_id",id);putExtra("nhh_desktop_mode",true)})
- }
+                if (rootFs.isValid() && rootFs.getVersion() >= latest) break
+                if (progress < 0) throw IllegalStateException("Winlator system-file installation failed.")
+                if (waited > 15 * 60 * 1000) throw IllegalStateException("Winlator system-file installation timed out.")
 
- fun loadSettings(c:Context,p:SharedPreferences):LauncherRuntimeSettings{
-  val id=p.getInt(PREF_CONTAINER_ID,0);val x=if(id>0)ContainerManager(c).getContainerById(id)else null
-  val enabled=p.getInt(PREF_PROFILE,NhhControllerRuntime.NHH_PROFILE_ID)!=0
-  if(x==null)return LauncherRuntimeSettings(forceFullscreen=p.getBoolean(PREF_FULLSCREEN,true),onScreenControls=enabled,preferredInputApi=NhhControllerRuntime.getPreferredInputApi(p),overlayOpacity=NhhControllerRuntime.getOverlayOpacity(p),controlScale=NhhControllerRuntime.getControlScale(p),stickDeadzone=NhhControllerRuntime.getStickDeadzone(p))
-  val d=GraphicsDrivers.parseIdentifiers(x.graphicsDriver);val esync=!x.envVars.split(Regex("\\s+")).any{it=="WINEESYNC=0"}
-  return LauncherRuntimeSettings(x.screenSize,d[0],d[1],x.getDXWrapper(),x.getAudioDriver(),x.getBox64Preset(),esync,x.getHUDMode().toInt()!=0,p.getBoolean(PREF_FULLSCREEN,true),enabled,NhhControllerRuntime.getPreferredInputApi(p),NhhControllerRuntime.getOverlayOpacity(p),NhhControllerRuntime.getControlScale(p),NhhControllerRuntime.getStickDeadzone(p))
- }
+                onProgress(
+                    if (progress > 0) (progress / 100f).coerceIn(0.02f, 0.38f) else 0.02f,
+                    "Installing system files…"
+                )
+            }
+        }
 
- fun saveSettings(c:Context,p:SharedPreferences,s:LauncherRuntimeSettings){
-  val id=p.getInt(PREF_CONTAINER_ID,0);require(id>0){"Import the game before changing runtime settings."}
-  val x=ContainerManager(c).getContainerById(id)?:throw IllegalStateException("The NHH container is missing.")
-  x.setScreenSize(s.resolution);x.setGraphicsDriver(s.vulkanDriver+","+s.openGlDriver);x.setDXWrapper(s.dxWrapper);x.setAudioDriver(s.audioDriver);x.setBox64Preset(s.box64Preset)
-  x.setEnvVars(setEnv(x.envVars,"WINEESYNC",if(s.wineEsync)"1"else"0"));x.setHUDMode(if(s.showFpsHud)1 else 0);x.saveData()
-  p.edit().putInt(PREF_PROFILE,if(s.onScreenControls)NhhControllerRuntime.NHH_PROFILE_ID else 0).putBoolean(PREF_FULLSCREEN,s.forceFullscreen).apply()
-  NhhControllerRuntime.saveControllerPreferences(c,p,s.overlayOpacity,s.controlScale,s.stickDeadzone,s.preferredInputApi)
- }
+        onProgress(0.42f, "Preparing NHH Xbox controller profile…")
+        val profile = NhhControllerRuntime.ensureNhhProfile(activity)
+        val manager = ContainerManager(activity)
+        val oldId = prefs.getInt(PREF_CONTAINER_ID, 0)
+        val existing = if (oldId > 0) manager.getContainerById(oldId) else null
 
- fun launchGame(c:Context,p:SharedPreferences){
-  val r=RootFS.find(c);require(r.isValid()&&r.getVersion()>=rootVersion){"Winlator system files are not installed."}
-  val id=p.getInt(PREF_CONTAINER_ID,0);require(id>0){"The NHH container has not been created."}
-  require(ContainerManager(c).getContainerById(id)!=null){"The NHH container no longer exists."}
-  val e=File(p.getString(PREF_GAME_PATH,null)?:throw IllegalStateException("The imported executable path is missing.")).canonicalFile
-  require(e.isFile){"NHH.exe is missing from the imported game folder."}
-  val profile=p.getInt(PREF_PROFILE,NhhControllerRuntime.NHH_PROFILE_ID);if(profile!=0)NhhControllerRuntime.ensureNhhProfile(c)
-  c.startActivity(Intent(c,XServerDisplayActivity::class.java).apply{putExtra("container_id",id);putExtra("exec_path",e.absolutePath);putExtra("nhh_controls_profile_id",profile);putExtra("nhh_force_fullscreen",p.getBoolean(PREF_FULLSCREEN,true));if(c !is Activity)addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)})
- }
+        if (!forceRebuild && existing != null) {
+            mapGameDrive(existing, root)
+            existing.saveData()
+            prefs.edit()
+                .putString(PREF_GAME_PATH, exe.absolutePath)
+                .putInt(PREF_PROFILE, profile.id)
+                .apply()
+            onProgress(1f, "NHH runtime verified.")
+            return
+        }
 
- fun readLaunchLog(c:Context):String{val f=File(c.filesDir,"nhh-launch.log");return if(f.isFile)f.readText()else"No launch report has been recorded yet."}
- fun shareLaunchReport(c:Context){
-  val d=NhhControllerRuntime.snapshot
-  val report=buildString{appendLine("=== NHH Controller Diagnostics ===");appendLine("State: "+d.state);appendLine("Profile: "+d.profileId);appendLine("Elements: "+d.elementCount);appendLine("VirtualGamepad: "+d.isVirtualGamepad);appendLine("Input API: "+d.preferredInputApi);appendLine("WinHandler: "+d.winHandlerReady);appendLine("Dispatches: "+d.dispatchCount);append(readLaunchLog(c))}
-  c.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_SUBJECT,"NHH Launcher diagnostic report");putExtra(Intent.EXTRA_TEXT,report)},"Share launch report"))
- }
+        onProgress(0.55f, "Creating NHH Winlator container…")
+        val container = createContainer(manager, activity)
+        mapGameDrive(container, root)
+        container.saveData()
 
- private fun setEnv(s:String,k:String,v:String)=s.split(Regex("\\s+")).filter{it.isNotBlank()&&!it.startsWith(k+"=")}.plus(k+"="+v).joinToString(" ")
- private fun appendLaunchLog(c:Context,msg:String){try{File(c.filesDir,"nhh-launch.log").appendText(System.currentTimeMillis().toString()+" "+msg+"\n")}catch(t:Throwable){Log.w("NHHLauncher","Could not write launch report",t)}}
+        prefs.edit()
+            .putInt(PREF_CONTAINER_ID, container.id)
+            .putString(PREF_GAME_PATH, exe.absolutePath)
+            .putInt(PREF_PROFILE, profile.id)
+            .apply()
+
+        if (existing != null) {
+            manager.removeContainerAsync(existing) {}
+        }
+
+        onProgress(1f, "NHH runtime ready.")
+    }
+
+    private fun mapGameDrive(container: Container, root: File) {
+        val drives = container.drivesIterator()
+            .filterNot { it.letter.equals("G", true) }
+            .map { it.letter + ":" + it.path }
+            .toMutableList()
+
+        drives.add("G:" + root.canonicalPath)
+        container.setDrives(drives.joinToString(""))
+    }
+
+    private suspend fun createContainer(manager: ContainerManager, context: Context): Container =
+        suspendCancellableCoroutine { continuation ->
+            val data = JSONObject()
+            data.put("name", CONTAINER_NAME)
+            data.put("screenSize", Container.DEFAULT_SCREEN_SIZE)
+            data.put("envVars", Container.DEFAULT_ENV_VARS)
+            data.put("cpuList", "")
+            data.put("cpuListWoW64", "")
+            data.put("graphicsDriver", GraphicsDrivers.getDefaultDriver(context))
+            data.put("dxwrapper", Container.DEFAULT_DXWRAPPER)
+            data.put("audioDriver", Container.DEFAULT_AUDIO_DRIVER)
+            data.put("wincomponents", Container.DEFAULT_WINCOMPONENTS)
+            data.put("drives", Container.DEFAULT_DRIVES)
+            data.put("hudMode", 0)
+            data.put("startupSelection", Container.STARTUP_SELECTION_ESSENTIAL)
+            data.put("box64Preset", Box64Preset.DEFAULT)
+            data.put("desktopTheme", WineThemeManager.DEFAULT_DESKTOP_THEME)
+
+            manager.createContainerAsync(data, object : Callback<Container> {
+                override fun call(container: Container?) {
+                    if (!continuation.isActive) return
+                    if (container != null) {
+                        continuation.resume(container)
+                    } else {
+                        continuation.resumeWithException(
+                            IllegalStateException("Winlator could not create the NHH container.")
+                        )
+                    }
+                }
+            })
+        }
+
+    fun openControlsEditor(activity: MainActivity) {
+        val profile = NhhControllerRuntime.ensureNhhProfile(activity)
+        activity.startActivity(
+            Intent(activity, ControlsEditorActivity::class.java).apply {
+                putExtra("profile_id", profile.id)
+                putExtra("nhh_editor_safe_area", true)
+            }
+        )
+    }
+
+    fun resetControlsLayout(context: Context) {
+        NhhControllerRuntime.resetNhhProfile(context)
+        appendLaunchLog(context, "Restored NHH Xbox control profile.")
+    }
+
+    fun enterDesktop(activity: MainActivity, prefs: SharedPreferences) {
+        val id = prefs.getInt(PREF_CONTAINER_ID, 0)
+        require(id > 0) { "The NHH container has not been created yet." }
+        require(ContainerManager(activity).getContainerById(id) != null) {
+            "The NHH container is missing."
+        }
+
+        appendLaunchLog(activity, "Entering NHH desktop mode. container=" + id)
+        activity.startActivity(
+            Intent(activity, XServerDisplayActivity::class.java).apply {
+                putExtra("container_id", id)
+                putExtra("nhh_desktop_mode", true)
+            }
+        )
+    }
+
+    fun loadSettings(context: Context, prefs: SharedPreferences): LauncherRuntimeSettings {
+        val id = prefs.getInt(PREF_CONTAINER_ID, 0)
+        val container = if (id > 0) ContainerManager(context).getContainerById(id) else null
+
+        if (container == null) {
+            return LauncherRuntimeSettings(
+                forceFullscreen = prefs.getBoolean(PREF_FULLSCREEN, true),
+                onScreenControls = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.NHH_PROFILE_ID) != 0,
+                preferredInputApi = NhhControllerRuntime.getPreferredInputApi(prefs),
+                overlayOpacity = NhhControllerRuntime.getOverlayOpacity(prefs),
+                controlScale = NhhControllerRuntime.getControlScale(prefs),
+                stickDeadzone = NhhControllerRuntime.getStickDeadzone(prefs)
+            )
+        }
+
+        val ids = GraphicsDrivers.parseIdentifiers(container.getGraphicsDriver())
+        return LauncherRuntimeSettings(
+            resolution = container.getScreenSize(),
+            vulkanDriver = ids.getOrElse(0) { GraphicsDrivers.DEFAULT_VULKAN_DRIVER },
+            openGlDriver = ids.getOrElse(1) { GraphicsDrivers.DEFAULT_OPENGL_DRIVER },
+            dxWrapper = container.getDXWrapper(),
+            audioDriver = container.getAudioDriver(),
+            box64Preset = container.getBox64Preset(),
+            wineEsync = !container.getEnvVars().split(Regex("\\s+")).contains("WINEESYNC=0"),
+            showFpsHud = container.getHUDMode().toInt() != 0,
+            forceFullscreen = prefs.getBoolean(PREF_FULLSCREEN, true),
+            onScreenControls = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.NHH_PROFILE_ID) != 0,
+            preferredInputApi = NhhControllerRuntime.getPreferredInputApi(prefs),
+            overlayOpacity = NhhControllerRuntime.getOverlayOpacity(prefs),
+            controlScale = NhhControllerRuntime.getControlScale(prefs),
+            stickDeadzone = NhhControllerRuntime.getStickDeadzone(prefs)
+        )
+    }
+
+    fun saveSettings(context: Context, prefs: SharedPreferences, settings: LauncherRuntimeSettings) {
+        val id = prefs.getInt(PREF_CONTAINER_ID, 0)
+        require(id > 0) { "Import a game before changing runtime settings." }
+
+        val container = ContainerManager(context).getContainerById(id)
+            ?: throw IllegalStateException("The NHH container is missing.")
+
+        container.setScreenSize(settings.resolution)
+        container.setGraphicsDriver(settings.vulkanDriver + "," + settings.openGlDriver)
+        container.setDXWrapper(settings.dxWrapper)
+        container.setAudioDriver(settings.audioDriver)
+        container.setBox64Preset(settings.box64Preset)
+        container.setEnvVars(
+            setEnv(
+                container.getEnvVars(),
+                "WINEESYNC",
+                if (settings.wineEsync) "1" else "0"
+            )
+        )
+        container.setHUDMode(if (settings.showFpsHud) 1 else 0)
+        container.saveData()
+
+        prefs.edit()
+            .putInt(PREF_PROFILE, if (settings.onScreenControls) NhhControllerRuntime.NHH_PROFILE_ID else 0)
+            .putBoolean(PREF_FULLSCREEN, settings.forceFullscreen)
+            .apply()
+
+        NhhControllerRuntime.saveControllerPreferences(
+            context,
+            prefs,
+            settings.overlayOpacity,
+            settings.controlScale,
+            settings.stickDeadzone,
+            settings.preferredInputApi
+        )
+    }
+
+    fun launchGame(context: Context, prefs: SharedPreferences) {
+        val id = prefs.getInt(PREF_CONTAINER_ID, 0)
+        require(id > 0) { "The NHH container has not been created." }
+
+        val container = ContainerManager(context).getContainerById(id)
+            ?: throw IllegalStateException("The NHH container no longer exists.")
+
+        val path = prefs.getString(PREF_GAME_PATH, null)
+            ?: throw IllegalStateException("The game executable path is missing.")
+        val executable = File(path).canonicalFile
+        require(executable.isFile) { "The selected executable is missing." }
+
+        val profileId = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.NHH_PROFILE_ID)
+        if (profileId != 0) NhhControllerRuntime.ensureNhhProfile(context)
+
+        val intent = Intent(context, XServerDisplayActivity::class.java).apply {
+            putExtra("container_id", container.id)
+            putExtra("exec_path", executable.absolutePath)
+            putExtra("nhh_controls_profile_id", profileId)
+            putExtra("nhh_force_fullscreen", prefs.getBoolean(PREF_FULLSCREEN, true))
+            if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        context.startActivity(intent)
+    }
+
+    fun readLaunchLog(context: Context): String {
+        val file = File(context.filesDir, "nhh-launch.log")
+        return if (file.isFile) file.readText() else "No launch report recorded."
+    }
+
+    fun shareLaunchReport(context: Context) {
+        val d = NhhControllerRuntime.snapshot
+        val report = buildString {
+            appendLine("=== NHH Controller Diagnostics ===")
+            appendLine("State: " + d.state)
+            appendLine("Profile: " + d.profileId)
+            appendLine("Elements: " + d.elementCount)
+            appendLine("VirtualGamepad: " + d.isVirtualGamepad)
+            appendLine("Dispatches: " + d.dispatchCount)
+            appendLine("Last event: " + d.lastDispatchEvent)
+            append(readLaunchLog(context))
+        }
+
+        context.startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "NHH Launcher diagnostic report")
+                    putExtra(Intent.EXTRA_TEXT, report)
+                },
+                "Share diagnostic report"
+            )
+        )
+    }
+
+    private fun setEnv(current: String, key: String, value: String): String =
+        current.split(Regex("\\s+"))
+            .filter { it.isNotBlank() && !it.startsWith(key + "=") }
+            .plus(key + "=" + value)
+            .joinToString(" ")
+
+    private fun appendLaunchLog(context: Context, message: String) {
+        try {
+            File(context.filesDir, "nhh-launch.log").appendText(
+                System.currentTimeMillis().toString() + " " + message + "\\n"
+            )
+        } catch (_: Throwable) {
+        }
+    }
 }

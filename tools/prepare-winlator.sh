@@ -225,7 +225,8 @@ if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not i
     marker = '''        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));'''
     replacement = '''        if (getIntent().hasExtra("nhh_controls_profile_id")
                 && !getIntent().getBooleanExtra("nhh_desktop_mode", false)) {
-            ControlsProfile profile = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, false);
+            int nhhProfileId = getIntent().getIntExtra("nhh_controls_profile_id", com.snapix.nhhlauncher.NhhControllerRuntime.DEFAULT_PROFILE_ID);
+            ControlsProfile profile = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, nhhProfileId);
             showInputControls(profile);
             com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession(this, inputControlsView, xServer, profile.id);
             if (getIntent().getBooleanExtra("nhh_force_fullscreen", true)) {
@@ -369,15 +370,15 @@ p.write_text(s)
 PY
 
 
-# 2e. Keep the existing application ID for update compatibility, while renaming the product.
+# 2e. Give the NHH app its own Android application ID.
 python3 - "$WINLATOR_APP/build.gradle" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1])
 s=p.read_text()
+s=s.replace("applicationId 'com.winlator'", "applicationId 'com.noheroshere.snap'")
 s=s.replace("versionCode 33", "versionCode 34")
 s=s.replace('versionName "11.2"', 'versionName "1.0.0"')
-# Do not change applicationId: changing it would make Android treat this as a different app and break in-place updates.
 p.write_text(s)
 PY
 

@@ -451,7 +451,9 @@ import sys
 p = Path(sys.argv[1])
 s = p.read_text()
 
-old_map = "updateCursorVisibility();\n                    preloaderDialog.closeOnUiThread();"
+old_map = """updateCursorVisibility();
+                    preloaderDialog.closeOnUiThread();
+                    flags[0] = true;""";
 new_map = """updateCursorVisibility();
                     if (nhhSession) runOnUiThread(() ->
                             com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(

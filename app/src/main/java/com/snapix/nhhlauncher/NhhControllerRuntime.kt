@@ -21,24 +21,16 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.max 
 import kotlin.math.min /** * Explicit runtime owner for the NHH Virtual Xbox Controller. * * Lifecycle: * Game starts -> createOrLoadProfile() -> applySafeAreaInsets() -> attach() * -> loadElements() after measure -> verifyBackendReady() -> Game receives XInput * * Safe cleanup on pause, screen lock, rotation, cast start/stop, crash, or exit. */ 
 object NhhControllerRuntime { 
-private const 
-val TAG = "NHHController" const 
+private const val TAG = "NHHController" const 
 val NHH_PROFILE_ID = 900 const 
 val NHH_PROFILE_NAME = "NHH Xbox Layout" 
-private const 
-val PREFS = "nhh" 
-private const 
-val PREF_LAYOUT_VERSION = "nhh_layout_version" 
-private const 
-val PREF_OVERLAY_OPACITY = "nhh_overlay_opacity" 
-private const 
-val PREF_CONTROL_SCALE = "nhh_control_scale" 
-private const 
-val PREF_STICK_DEADZONE = "nhh_stick_deadzone" 
-private const 
-val PREF_INPUT_API = "nhh_input_api" // "XINPUT", "DINPUT", "BOTH" 
-private const 
-val CURRENT_LAYOUT_VERSION = 3 
+private const val PREFS = "nhh" 
+private const val PREF_LAYOUT_VERSION = "nhh_layout_version" 
+private const val PREF_OVERLAY_OPACITY = "nhh_overlay_opacity" 
+private const val PREF_CONTROL_SCALE = "nhh_control_scale" 
+private const val PREF_STICK_DEADZONE = "nhh_stick_deadzone" 
+private const val PREF_INPUT_API = "nhh_input_api" // "XINPUT", "DINPUT", "BOTH" 
+private const val CURRENT_LAYOUT_VERSION = 3 
 enum class LifecycleState { DETACHED, PROFILE_LOADED, ATTACHED_WAITING_MEASURE, ACTIVE_DISPATCHING, PAUSED } 
 data class DiagnosticsSnapshot( 
 val state: LifecycleState = LifecycleState.DETACHED, 

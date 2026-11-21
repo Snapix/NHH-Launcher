@@ -225,6 +225,10 @@ p = Path(sys.argv[1])
 s = p.read_text()
 s = s.replace('"Winlator",\n                XServerDisplayActivity.class', '"No Heroes Here",\n                XServerDisplayActivity.class')
 s = s.replace('return "Winlator is running in the background";', 'return "No Heroes Here is running in the background";')
+s = s.replace(
+    "Class<?> targetActivity = containerActive ? XServerDisplayActivity.class : MainActivity.class;",
+    "Class<?> targetActivity = containerActive ? XServerDisplayActivity.class : com.snapix.nhhlauncher.MainActivity.class;"
+)
 p.write_text(s)
 PY
 

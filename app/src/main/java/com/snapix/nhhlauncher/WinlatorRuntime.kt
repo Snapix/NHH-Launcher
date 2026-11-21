@@ -149,7 +149,7 @@ object WinlatorRuntime {
                         continuation.resume(container)
                     } else {
                         continuation.resumeWithException(
-                            IllegalStateException("Winlator could not create the NHH container.")
+                            IllegalStateException("Could not create the NHH game environment.")
                         )
                     }
                 }

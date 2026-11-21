@@ -362,6 +362,18 @@ p.write_text(s)
 PY
 
 
+# 2e. Keep the existing application ID for update compatibility, while renaming the product.
+python3 - "$WINLATOR_APP/build.gradle" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1])
+s=p.read_text()
+s=s.replace("versionCode 33", "versionCode 34")
+s=s.replace('versionName "11.2"', 'versionName "1.0.0"')
+# Do not change applicationId: changing it would make Android treat this as a different app and break in-place updates.
+p.write_text(s)
+PY
+
 # 2d. Register NHH first-run and controller activities in the final Winlator manifest.
 python3 - "$MANIFEST" <<'PY'
 from pathlib import Path
@@ -384,8 +396,8 @@ block='''        <activity android:name="com.snapix.nhhlauncher.OnboardingActivi
 '''
 if "com.snapix.nhhlauncher.OnboardingActivity" not in s:
     s=s.replace(anchor,block+anchor,1)
-if 'android:icon="@drawable/nhh_icon"' not in s:
-    s=s.replace('<application ', '<application android:icon="@drawable/nhh_icon" ', 1)
+s=s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/nhh_icon"')
+s=s.replace('android:label="@string/app_name"', 'android:label="No Heroes Here"')
 p.write_text(s)
 PY
 

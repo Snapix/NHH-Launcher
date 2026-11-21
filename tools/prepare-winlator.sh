@@ -360,7 +360,7 @@ if "NhhControllerRuntime.onViewportChanged(this, inputControlsView)" not in s:
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (inputControlsView != null && getIntent().hasExtra("nhh_controls_profile_id")) {
-            com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(this, inputControlsView);
+            com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(inputControlsView);
         }
     }
 '''

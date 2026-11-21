@@ -65,7 +65,8 @@ jobs:
           unzip -l "$APK" | grep -q "nhh_icon.png"
           unzip -l "$APK" | grep -q "assets/inputcontrols/profiles/controls-5.icp"
           unzip -l "$APK" | grep -q "assets/inputcontrols/profiles/controls-6.icp"
-          ! unzip -l "$APK" | grep -E "assets/inputcontrols/profiles/controls-[0-46-9]+\.icp"
+          PROFILE_COUNT=$(unzip -l "$APK" | grep -E "assets/inputcontrols/profiles/controls-[0-9]+\.icp" | wc -l)
+          test "$PROFILE_COUNT" -eq 2
 
       - uses: actions/upload-artifact@v6
         with:

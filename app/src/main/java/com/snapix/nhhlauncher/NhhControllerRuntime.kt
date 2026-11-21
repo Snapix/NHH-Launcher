@@ -12,9 +12,10 @@ import com.winlator.xserver.XServer
 import java.util.concurrent.CopyOnWriteArrayList
 
 object NhhControllerRuntime {
-    const val NHH_PROFILE_ID = 100
-    private const val TEMPLATE_PROFILE_ID = 3
-    private const val PROFILE_NAME = "NHH Xbox"
+    const val MAIN_PROFILE_ID = 5
+    const val NO_KEY_PROFILE_ID = 6
+    const val DEFAULT_PROFILE_ID = MAIN_PROFILE_ID
+    private const val PREF_SELECTED_PROFILE = "nhh_selected_profile_id"
 
     private const val PREF_OVERLAY_OPACITY = "nhh_overlay_opacity"
     private const val PREF_CONTROL_SCALE = "nhh_control_scale"
@@ -27,7 +28,7 @@ object NhhControllerRuntime {
 
     data class DiagnosticsSnapshot(
         val state: LifecycleState = LifecycleState.DETACHED,
-        val profileId: Int = NHH_PROFILE_ID,
+        val profileId: Int = DEFAULT_PROFILE_ID,
         val elementCount: Int = 0,
         val isVirtualGamepad: Boolean = true,
         val touchscreenControlsEnabled: Boolean = false,
@@ -62,30 +63,34 @@ object NhhControllerRuntime {
     }
 
     @JvmStatic
-    fun ensureNhhProfile(context: Context, forceReset: Boolean = false): ControlsProfile {
-        val manager = InputControlsManager(context)
-        var profile = manager.getProfile(NHH_PROFILE_ID)
-
-        if (profile == null || forceReset) {
-            if (profile != null) {
-                manager.removeProfile(profile)
-            }
-
-            val template = manager.getProfile(TEMPLATE_PROFILE_ID)?.takeIf { it.isVirtualGamepad }
-                ?: manager.getProfiles().firstOrNull { it.isVirtualGamepad }
-                ?: manager.getProfiles().firstOrNull()
-                ?: throw IllegalStateException("Winlator has no input-control profile.")
-
-            profile = manager.duplicateProfile(template)
-            profile.setName(PROFILE_NAME)
-            profile.save()
+    fun selectedProfileId(prefs: SharedPreferences): Int {
+        return prefs.getInt(PREF_SELECTED_PROFILE, DEFAULT_PROFILE_ID).let {
+            if (it == MAIN_PROFILE_ID || it == NO_KEY_PROFILE_ID) it else DEFAULT_PROFILE_ID
         }
+    }
 
+    @JvmStatic
+    fun setSelectedProfile(prefs: SharedPreferences, profileId: Int) {
+        require(profileId == MAIN_PROFILE_ID || profileId == NO_KEY_PROFILE_ID)
+        prefs.edit().putInt(PREF_SELECTED_PROFILE, profileId).apply()
+    }
+
+    @JvmStatic
+    fun ensureNhhProfile(context: Context, profileId: Int = DEFAULT_PROFILE_ID): ControlsProfile {
+        require(profileId == MAIN_PROFILE_ID || profileId == NO_KEY_PROFILE_ID)
+        val profile = InputControlsManager.loadProfile(
+            context,
+            ControlsProfile.getProfileFile(context, profileId)
+        ) ?: throw IllegalStateException("NHH control layout #$profileId is missing.")
+        profile.loadControllers()
         return profile
     }
 
     fun resetNhhProfile(context: Context) {
-        ensureNhhProfile(context, true)
+        val prefs = context.getSharedPreferences("nhh", Context.MODE_PRIVATE)
+        val selected = selectedProfileId(prefs)
+        ensureNhhProfile(context, selected)
+        ensureNhhProfile(context, if (selected == MAIN_PROFILE_ID) NO_KEY_PROFILE_ID else MAIN_PROFILE_ID)
     }
 
     @JvmStatic
@@ -96,14 +101,7 @@ object NhhControllerRuntime {
         profileId: Int = NHH_PROFILE_ID
     ) {
         val prefs = activity.getSharedPreferences("nhh", Context.MODE_PRIVATE)
-        val profile = if (profileId == NHH_PROFILE_ID) {
-            ensureNhhProfile(activity)
-        } else {
-            InputControlsManager.loadProfile(
-                activity,
-                ControlsProfile.getProfileFile(activity, profileId)
-            ) ?: ensureNhhProfile(activity)
-        }
+        val profile = ensureNhhProfile(activity, profileId)
 
         attachedView = inputControlsView
         attachedProfile = profile

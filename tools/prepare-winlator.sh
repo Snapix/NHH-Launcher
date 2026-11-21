@@ -60,6 +60,7 @@ cp "$NHH_SOURCE/OnboardingActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/n
 cp "$NHH_SOURCE/ControlsActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControlsActivity.kt"
 cp "$NHH_SOURCE/ControllerTestActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControllerTestActivity.kt"
 cp "$NHH_SOURCE/NhhSessionMenu.java" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/NhhSessionMenu.java"
+cp "$NHH_SOURCE/NhhStartupOverlay.java" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/NhhStartupOverlay.java"
 rm -rf "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/cast"
 cp -r "$NHH_SOURCE/cast" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/"
 # 2b. Install only the two supplied NHH controller layouts.
@@ -429,6 +430,83 @@ if "NhhControllerRuntime.detachFromSession();" not in s:
         "protected void onDestroy() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.detachFromSession();",
         1
     )
+
+p.write_text(s)
+PY
+
+# 5b. Use an NHH-owned launch overlay instead of the native startup dialog.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+
+p = Path(sys.argv[1])
+s = p.read_text()
+
+old_map = "updateCursorVisibility();\n                    preloaderDialog.closeOnUiThread();"
+new_map = """updateCursorVisibility();
+                    if (nhhSession) com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(
+                            findViewById(R.id.FLXServerDisplay)
+                    );
+                    preloaderDialog.closeOnUiThread();"""
+if "NhhStartupOverlay.dismiss(" not in s:
+    if old_map not in s:
+        raise SystemExit("XServer first-window callback marker not found")
+    s = s.replace(old_map, new_map, 1)
+
+if 'NhhStartupOverlay.show(this, rootView, "Launching No Heroes Here…")' not in s:
+    marker = "        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));"
+    replacement = """        if (isNhhSession) {
+            com.snapix.nhhlauncher.NhhStartupOverlay.show(this, rootView, "Launching No Heroes Here…");
+            rootView.postDelayed(() -> {
+                if (com.snapix.nhhlauncher.NhhStartupOverlay.isLoading(rootView)) {
+                    com.snapix.nhhlauncher.NhhStartupOverlay.showError(
+                            this,
+                            rootView,
+                            "The game did not open a window. Check that the selected executable and game files are complete.",
+                            this::exit
+                    );
+                }
+            }, 180000);
+        }
+
+        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));"""
+    if marker not in s:
+        raise SystemExit("XServer setupUI completion marker not found")
+    s = s.replace(marker, replacement, 1)
+
+worker_old = """        Executors.newSingleThreadExecutor().execute(() -> {
+            if (!isGenerateWineprefix()) {
+                setupWineSystemFiles();
+                extractGraphicsDriverFiles();
+                changeWineAudioDriver();
+            }
+            setupXEnvironment();
+        });"""
+worker_new = """        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                if (!isGenerateWineprefix()) {
+                    setupWineSystemFiles();
+                    extractGraphicsDriverFiles();
+                    changeWineAudioDriver();
+                }
+                setupXEnvironment();
+            }
+            catch (Throwable error) {
+                if (nhhSession) {
+                    runOnUiThread(() -> com.snapix.nhhlauncher.NhhStartupOverlay.showError(
+                            this,
+                            findViewById(R.id.FLXServerDisplay),
+                            error.getMessage() != null ? error.getMessage() : "The game environment could not start.",
+                            this::exit
+                    ));
+                }
+                else throw new RuntimeException(error);
+            }
+        });"""
+if "NhhStartupOverlay.showError(" not in s:
+    if worker_old not in s:
+        raise SystemExit("XServer startup worker marker not found")
+    s = s.replace(worker_old, worker_new, 1)
 
 p.write_text(s)
 PY

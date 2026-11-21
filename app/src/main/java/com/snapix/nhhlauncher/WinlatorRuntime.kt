@@ -74,12 +74,12 @@ object WinlatorRuntime {
 
                 onProgress(
                     if (progress > 0) (progress / 100f).coerceIn(0.02f, 0.38f) else 0.02f,
-                    "Installing system files…"
+                    "Installing required components…"
                 )
             }
         }
 
-        onProgress(0.42f, "Preparing NHH Xbox controller profile…")
+        onProgress(0.42f, "Preparing NHH touch controls…")
         val profile = NhhControllerRuntime.ensureNhhProfile(activity, NhhControllerRuntime.selectedProfileId(prefs))
         val manager = ContainerManager(activity)
         val oldId = prefs.getInt(PREF_CONTAINER_ID, 0)

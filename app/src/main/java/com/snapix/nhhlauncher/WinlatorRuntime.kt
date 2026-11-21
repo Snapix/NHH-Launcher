@@ -173,7 +173,7 @@ object WinlatorRuntime {
             })
         }
 
-    fun openControlsEditor(activity: MainActivity, profileId: Int = NhhControllerRuntime.selectedProfileId(activity.getSharedPreferences("nhh", Context.MODE_PRIVATE))) {
+    fun openControlsEditor(activity: AppCompatActivity, profileId: Int = NhhControllerRuntime.selectedProfileId(activity.getSharedPreferences("nhh", Context.MODE_PRIVATE))) {
         val profile = NhhControllerRuntime.ensureNhhProfile(activity, profileId)
         activity.startActivity(
             Intent(activity, ControlsEditorActivity::class.java).apply {

@@ -2,46 +2,59 @@ name: Build NHH Launcher
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout with Winlator submodule
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android build dependencies
+      - name: Configure Android SDK
         run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          sdkmanager --version
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;24.0.8215888" "cmake;3.22.1"
 
-      - name: Prepare NHH + Winlator sources
+      - name: Prepare Winlator runtime
         run: bash tools/prepare-winlator.sh
 
-      - name: Build debug APK
-        working-directory: winlator-app
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
         with:
-          name: NHH-Launcher-debug
-          path: winlator-app/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          gradle-version: '8.7'
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Verify NHH launcher is the Android launcher activity
+        run: |
+          APK="winlator-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "com.snapix.nhhlauncher.MainActivity" /tmp/badging.txt
+          grep -q "launchable-activity: name='com.snapix.nhhlauncher.MainActivity'" /tmp/badging.txt
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: nhh-launcher-debug
+          path: winlator-app/app/build/outputs/apk/debug/app-debug.apk

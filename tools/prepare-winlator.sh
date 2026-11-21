@@ -219,35 +219,6 @@ if "NhhControllerRuntime.onSessionResumed(this);" not in s:
 if "NhhControllerRuntime.detachFromSession();" not in s:
     s=s.replace("protected void onDestroy() {", "protected void onDestroy() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.detachFromSession();", 1)
 
-if "nhhMenuOverlay" not in s:
-    idx=s.rfind("\n}")
-    method=r'''
-    private android.widget.FrameLayout nhhMenuOverlay;
-
-    @Override
-    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        if (inputControlsView != null && getIntent().hasExtra("nhh_controls_profile_id")) {
-            com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(this, inputControlsView);
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (getIntent().hasExtra("nhh_controls_profile_id")
-                && !getIntent().getBooleanExtra("nhh_desktop_mode", false)
-                && nhhMenuOverlay != null) {
-            nhhMenuOverlay.setVisibility(nhhMenuOverlay.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-            return;
-        }
-        if (environment != null) {
-            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) drawerLayout.openDrawer(GravityCompat.START);
-            else drawerLayout.closeDrawers();
-        }
-    }
-'''
-    s=s[:idx]+method+s[idx:]
-p.write_text(s)
 PY
 
 # 6. Patch editor/runtime input dispatch and safe-area parity.

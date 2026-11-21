@@ -37,6 +37,7 @@ if "buildFeatures { compose true }" not in s:
     )
 deps = """    implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.compose.animation:animation:1.7.8'
     implementation 'androidx.compose.ui:ui:1.7.8'
     implementation 'androidx.compose.ui:ui-tooling-preview:1.7.8'
     implementation 'androidx.compose.material3:material3:1.4.0'
@@ -58,6 +59,7 @@ cp "$NHH_SOURCE/ControllerTestScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix
 cp "$NHH_SOURCE/OnboardingActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/OnboardingActivity.kt"
 cp "$NHH_SOURCE/ControlsActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControlsActivity.kt"
 cp "$NHH_SOURCE/ControllerTestActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControllerTestActivity.kt"
+cp "$NHH_SOURCE/NhhSessionMenu.java" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/NhhSessionMenu.java"
 rm -rf "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/cast"
 cp -r "$NHH_SOURCE/cast" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/"
 # 2b. Install only the two supplied NHH controller layouts.
@@ -73,15 +75,7 @@ mkdir -p "$NHH_DRAWABLES"
 curl -L --fail --retry 3 "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/696140/header.jpg?t=1726857314" -o "$NHH_DRAWABLES/nhh_hero.jpg"
 curl -L --fail --retry 3 "https://image.api.playstation.com/cdn/UP3562/CUSA12079_00/2LwCzU02fXbDK7wIcCYRHhuRf6zJSqib.png" -o "$NHH_DRAWABLES/nhh_poster.png"
 cp "$NHH_DRAWABLES/nhh_poster.png" "$NHH_DRAWABLES/nhh_icon.png"
-rm -rf /tmp/nhh-gif-frames
-mkdir -p /tmp/nhh-gif-frames
-for i in 0 1 2 3 4 5 6 7; do
-    convert "$NHH_DRAWABLES/nhh_hero.jpg" -resize "720x" -gravity center -crop "$((92 + i * 4))%x$((92 + i * 4))%+0+0" +repage -resize 640x360 "/tmp/nhh-gif-frames/frame-$i.jpg"
-done
-convert -delay 9 -loop 0 /tmp/nhh-gif-frames/frame-*.jpg "$NHH_DRAWABLES/nhh_gameplay.gif"
-
-
-
+# Use the original game artwork without synthetic zoom-crop animation.
 # 2d. Patch Winlator's native touch/gamepad dispatch path.
 python3 tools/patch_winlator_input.py "$WINLATOR_APP/src/main/java/com/winlator/widget/InputControlsView.java"
 
@@ -92,9 +86,10 @@ from pathlib import Path
 import sys
 p = Path(sys.argv[1])
 s = p.read_text()
+
 if "NHH_INSTALL_PROGRESS" not in s:
     s = s.replace(
-        "public static final String FILENAME = \"rootfs.tzst\";",
+        'public static final String FILENAME = "rootfs.tzst";',
         """public static final String FILENAME = "rootfs.tzst";
     private static volatile int NHH_INSTALL_PROGRESS = 0;
     private static volatile boolean NHH_INSTALL_RUNNING = false;
@@ -112,21 +107,30 @@ if "NHH_INSTALL_PROGRESS" not in s:
         "public static void installIfNeeded(final androidx.appcompat.app.AppCompatActivity activity) {",
         1
     )
-    s = s.replace(
-        'dialog.show(R.string.installing_system_files);',
-        'NHH_INSTALL_PROGRESS = 0; NHH_INSTALL_RUNNING = true; if (!activity.getClass().getName().equals("com.snapix.nhhlauncher.OnboardingActivity")) dialog.show(R.string.installing_system_files);',
-        1
-    )
-    s = s.replace(
-        "final int progress = (int)(((float)totalSize / contentLength) * 100);",
-        "final int progress = (int)(((float)totalSize / contentLength) * 100); NHH_INSTALL_PROGRESS = Math.max(0, Math.min(100, progress));",
-        1
-    )
-    s = s.replace(
-        "dialog.closeOnUiThread();",
-        "NHH_INSTALL_PROGRESS = success ? 100 : -1; NHH_INSTALL_RUNNING = false; dialog.closeOnUiThread();",
-        1
-    )
+
+s = s.replace(
+    "dialog.show(R.string.installing_system_files);",
+    """boolean nhhHost = activity.getClass().getName().startsWith("com.snapix.nhhlauncher.");
+        NHH_INSTALL_PROGRESS = 0;
+        NHH_INSTALL_RUNNING = true;
+        if (!nhhHost) dialog.show(R.string.installing_system_files);""",
+    1
+)
+s = s.replace(
+    "activity.runOnUiThread(() -> dialog.setProgress(progress));",
+    "if (!nhhHost) activity.runOnUiThread(() -> dialog.setProgress(progress));",
+    1
+)
+s = s.replace(
+    "else AppUtils.showToast(activity, R.string.unable_to_install_system_files);",
+    "else if (!nhhHost) AppUtils.showToast(activity, R.string.unable_to_install_system_files);",
+    1
+)
+s = s.replace(
+    "dialog.closeOnUiThread();",
+    "NHH_INSTALL_PROGRESS = success ? 100 : -1; NHH_INSTALL_RUNNING = false; if (!nhhHost) dialog.closeOnUiThread();",
+    1
+)
 p.write_text(s)
 PY
 

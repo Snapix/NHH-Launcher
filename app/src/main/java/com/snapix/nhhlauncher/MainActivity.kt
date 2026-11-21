@@ -314,6 +314,12 @@ private fun MainMenu(
             Text("CONTROLS")
         }
 
+        FilledTonalButton(onClick = onSettings, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            Icon(Icons.Default.Settings, null)
+            Spacer(Modifier.width(8.dp))
+            Text("SETTINGS")
+        }
+
         OutlinedButton(
             onClick = onEnterDesktop,
             modifier = Modifier.fillMaxWidth().height(58.dp),

@@ -1,4 +1,4 @@
-package com.noheroshere.snap
+package com.snapix.nhhlauncher
 
 import android.app.Activity
 import android.content.Context

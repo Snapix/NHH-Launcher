@@ -25,6 +25,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
@@ -228,34 +230,79 @@ private fun OnboardingApp(activity: OnboardingActivity) {
 @Composable
 private fun WelcomePage() {
     val transition = rememberInfiniteTransition(label = "hero pulse")
-    val scale by transition.animateFloat(0.985f, 1.015f,
-        infiniteRepeatable(tween(2300), RepeatMode.Reverse), label = "hero scale")
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Image(painterResource(R.drawable.nhh_poster), "No Heroes Here artwork",
-            Modifier.widthIn(max = 292.dp).fillMaxWidth().height(260.dp)
-                .graphicsLayer(scaleX = scale, scaleY = scale).clip(RoundedCornerShape(22.dp)),
-            contentScale = ContentScale.Fit)
-        Text("Your game.\nYour Android.", style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-        Text("A dedicated Android experience for No Heroes Here.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center)
+    val scale by transition.animateFloat(
+        0.985f,
+        1.015f,
+        infiniteRepeatable(tween(2300), RepeatMode.Reverse),
+        label = "hero scale"
+    )
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val heroHeight = (maxHeight * 0.40f).coerceIn(112.dp, 230.dp)
+        val compact = maxHeight < 390.dp
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 13.dp)
+        ) {
+            Image(
+                painterResource(R.drawable.nhh_poster),
+                "No Heroes Here artwork",
+                Modifier.widthIn(max = 292.dp).fillMaxWidth().height(heroHeight)
+                    .graphicsLayer(scaleX = scale, scaleY = scale)
+                    .clip(RoundedCornerShape(22.dp)),
+                contentScale = ContentScale.Fit
+            )
+            Text(
+                "Your game.\nYour Android.",
+                style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                "A dedicated Android experience for No Heroes Here.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
 @Composable
 private fun OwnershipPage() {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Image(painterResource(R.drawable.nhh_hero), "Game artwork",
-            Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(20.dp)), contentScale = ContentScale.Fit)
-        Text("Bring your own\ngame files", style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-        Text("You must own No Heroes Here on Steam. Copy the installed game folder from your computer and create a ZIP archive.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-        Text("Your game files stay on your device. This app does not include or distribute the game.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, textAlign = TextAlign.Center)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val artworkHeight = (maxHeight * 0.30f).coerceIn(88.dp, 165.dp)
+        val compact = maxHeight < 390.dp
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 15.dp)
+        ) {
+            Image(
+                painterResource(R.drawable.nhh_hero),
+                "Game artwork",
+                Modifier.fillMaxWidth().height(artworkHeight).clip(RoundedCornerShape(20.dp)),
+                contentScale = ContentScale.Fit
+            )
+            Text(
+                "Bring your own\ngame files",
+                style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                "You must own No Heroes Here on Steam. Copy the installed game folder from your computer and create a ZIP archive.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                "Your game files stay on your device. This app does not include or distribute the game.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -302,7 +349,8 @@ private fun CompletePage() {
 
 @Composable
 private fun CreditsPage(onGithub: () -> Unit, onInstagram: () -> Unit, onProjects: () -> Unit) {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Image(painterResource(R.drawable.nhh_poster), "No Heroes Here",
             Modifier.widthIn(max = 220.dp).fillMaxWidth().height(140.dp), contentScale = ContentScale.Fit)

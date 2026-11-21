@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.view.View
 import android.view.ViewTreeObserver
+import java.io.FileOutputStream
 import com.winlator.inputcontrols.ControlsProfile
 import com.winlator.inputcontrols.InputControlsManager
 import com.winlator.widget.InputControlsView
@@ -78,12 +79,40 @@ object NhhControllerRuntime {
     @JvmStatic
     fun ensureNhhProfile(context: Context, profileId: Int = DEFAULT_PROFILE_ID): ControlsProfile {
         require(profileId == MAIN_PROFILE_ID || profileId == NO_KEY_PROFILE_ID)
-        val profile = InputControlsManager.loadProfile(
-            context,
-            ControlsProfile.getProfileFile(context, profileId)
-        ) ?: throw IllegalStateException("NHH control layout #$profileId is missing.")
+
+        // These are normal Winlator controller profiles. Install them into
+        // Winlator's real files/profiles directory before loading them.
+        installWinlatorProfileIfNeeded(context, profileId)
+
+        val profileFile = ControlsProfile.getProfileFile(context, profileId)
+        val profile = InputControlsManager.loadProfile(context, profileFile)
+            ?: throw IllegalStateException("Winlator controller profile #$profileId could not be loaded.")
         profile.loadControllers()
         return profile
+    }
+
+    private fun installWinlatorProfileIfNeeded(context: Context, profileId: Int) {
+        val assetPath = "inputcontrols/profiles/controls-$profileId.icp"
+        val destination = ControlsProfile.getProfileFile(context, profileId)
+
+        val existing = if (destination.isFile) {
+            InputControlsManager.loadProfile(context, destination)
+        } else null
+
+        // Preserve a valid profile so edits made in the Controls Editor survive.
+        if (existing != null &&
+            existing.id == profileId &&
+            ((profileId == MAIN_PROFILE_ID && existing.getName() == "NHH MAIN") ||
+             (profileId == NO_KEY_PROFILE_ID && existing.getName() == "NHH MAIN no key"))) {
+            return
+        }
+
+        destination.parentFile?.mkdirs()
+        context.assets.open(assetPath).use { input ->
+            FileOutputStream(destination).use { output ->
+                input.copyTo(output)
+            }
+        }
     }
 
     fun resetNhhProfile(context: Context) {

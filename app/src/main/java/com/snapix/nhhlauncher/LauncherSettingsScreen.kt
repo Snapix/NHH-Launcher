@@ -77,7 +77,7 @@ internal fun LauncherSettingsScreen(
             SwitchRow("Force fullscreen", "Start game fullscreen", settings.forceFullscreen) {
                 onChange(settings.copy(forceFullscreen = it))
             }
-            SwitchRow("FPS HUD", "Show Winlator frame-rate overlay", settings.showFpsHud) {
+            SwitchRow("FPS HUD", "Show the frame-rate overlay", settings.showFpsHud) {
                 onChange(settings.copy(showFpsHud = it))
             }
         }
@@ -85,7 +85,7 @@ internal fun LauncherSettingsScreen(
         SettingCard("Audio & Performance", Icons.Default.VolumeUp) {
             Text("Audio driver: " + settings.audioDriver)
             Text("Box64 preset: " + settings.box64Preset)
-            SwitchRow("Wine Esync", "Keep WINEESYNC enabled", settings.wineEsync) {
+            SwitchRow("Async rendering", "Keep asynchronous rendering enabled", settings.wineEsync) {
                 onChange(settings.copy(wineEsync = it))
             }
         }

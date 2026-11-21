@@ -46,14 +46,10 @@ import java.io.File
 import java.io.FileOutputStream 
 import java.util.Locale 
 import java.util.zip.ZipInputStream 
-private const 
-val PREFS = "nhh" 
-private const 
-val GAME_DIR = "game" 
-private const 
-val GAME_EXE = "game_exe" 
-private const 
-val PREF_SETUP_IN_PROGRESS = "setup_in_progress" private 
+private const val PREFS = "nhh" 
+private const val GAME_DIR = "game" 
+private const val GAME_EXE = "game_exe" 
+private const val PREF_SETUP_IN_PROGRESS = "setup_in_progress" private 
 enum class LauncherScreen { HOME, SETTINGS, CONTROLLER_TEST } private 
 enum class SetupStage(
 val label: String) { EXTRACTING("Extracting the ZIP…"), ANALYSING("Analysing folders and subfolders…"), FOUND("Game executable found"), SELECT_EXE("Select the game executable"), BOOTSTRAP("Installing and setting up Winlator essentials"), FINISHING("Finishing runtime setup…") } 

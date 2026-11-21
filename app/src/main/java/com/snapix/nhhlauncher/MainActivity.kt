@@ -53,7 +53,7 @@ private enum class SetupStage(val label: String) {
     ANALYSING("Finding game executable…"),
     FOUND("Game executable found"),
     SELECT_EXE("Select executable"),
-    BOOTSTRAP("Preparing Winlator runtime…")
+    BOOTSTRAP("Preparing game environment…")
 }
 
 class MainActivity : AppCompatActivity() {
@@ -107,7 +107,7 @@ private fun NhhApp(activity: MainActivity) {
             try {
                 setupStage = SetupStage.BOOTSTRAP
                 setupProgress = 0f
-                setupDetail = "Preparing Winlator runtime…"
+                setupDetail = "Preparing game environment…"
                 WinlatorRuntime.ensureReady(activity, file, prefs, { p, d ->
                     setupProgress = p
                     setupDetail = d
@@ -359,16 +359,13 @@ private fun AnimatedGameGif() {
     AndroidView(
         factory = { ctx ->
             android.widget.ImageView(ctx).apply {
-                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-                setImageResource(R.drawable.nhh_gameplay)
-                post {
-                    if (android.os.Build.VERSION.SDK_INT >= 28) {
-                        (drawable as? android.graphics.drawable.AnimatedImageDrawable)?.start()
-                    }
-                }
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                setAdjustViewBounds(true)
+                setImageResource(R.drawable.nhh_hero)
+                setBackgroundColor(android.graphics.Color.rgb(20, 11, 11))
             }
         },
-        modifier = Modifier.fillMaxWidth().height(180.dp)
+        modifier = Modifier.fillMaxWidth().height(190.dp)
     )
 }
 

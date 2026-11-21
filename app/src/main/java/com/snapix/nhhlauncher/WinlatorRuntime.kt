@@ -69,7 +69,7 @@ object WinlatorRuntime {
                 val progress = RootFSInstaller.getNhhInstallProgress()
 
                 if (rootFs.isValid() && rootFs.getVersion() >= latest) break
-                if (progress < 0) throw IllegalStateException("Winlator system-file installation failed.")
+                if (progress < 0) throw IllegalStateException("Could not install the required system components.")
                 if (waited > 15 * 60 * 1000) throw IllegalStateException("Winlator system-file installation timed out.")
 
                 onProgress(
@@ -96,7 +96,7 @@ object WinlatorRuntime {
             return
         }
 
-        onProgress(0.55f, "Creating NHH Winlator container…")
+        onProgress(0.55f, "Creating the NHH game environment…")
         val container = createContainer(manager, activity)
         mapGameDrive(container, root)
         container.saveData()
@@ -117,10 +117,10 @@ object WinlatorRuntime {
     private fun mapGameDrive(container: Container, root: File) {
         val drives = container.drivesIterator()
             .filterNot { it.letter.equals("G", true) }
-            .map { it.letter + ":" + it.path }
+            .map { it.letter + ":" + it.path + "/" }
             .toMutableList()
 
-        drives.add("G:" + root.canonicalPath)
+        drives.add("G:" + root.canonicalPath + "/")
         container.setDrives(drives.joinToString(""))
     }
 

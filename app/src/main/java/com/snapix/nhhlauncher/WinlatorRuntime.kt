@@ -1,4 +1,4 @@
-package com.snapix.nhhlauncher
+package com.noheroshere.snap
 
 import android.app.Activity
 import android.content.Context
@@ -42,7 +42,7 @@ data class LauncherRuntimeSettings(
 object WinlatorRuntime {
     const val PREF_CONTAINER_ID = "winlator_container_id"
     private const val PREF_GAME_PATH = "game_exe"
-    private const val PREF_PROFILE = "nhh_controls_profile_id"
+    private const val PREF_PROFILE = "nhh_selected_profile_id"
     private const val PREF_FULLSCREEN = "nhh_force_fullscreen"
     private const val CONTAINER_NAME = "NHH"
 
@@ -96,7 +96,7 @@ object WinlatorRuntime {
         }
 
         onProgress(0.42f, "Preparing NHH Xbox controller profile…")
-        val profile = NhhControllerRuntime.ensureNhhProfile(activity)
+        val profile = NhhControllerRuntime.ensureNhhProfile(activity, NhhControllerRuntime.selectedProfileId(prefs))
         val manager = ContainerManager(activity)
         val oldId = prefs.getInt(PREF_CONTAINER_ID, 0)
         val existing = if (oldId > 0) manager.getContainerById(oldId) else null
@@ -106,7 +106,7 @@ object WinlatorRuntime {
             existing.saveData()
             prefs.edit()
                 .putString(PREF_GAME_PATH, exe.absolutePath)
-                .putInt(PREF_PROFILE, profile.id)
+                .putInt(PREF_PROFILE, NhhControllerRuntime.selectedProfileId(prefs))
                 .apply()
             onProgress(1f, "NHH runtime verified.")
             return
@@ -172,8 +172,8 @@ object WinlatorRuntime {
             })
         }
 
-    fun openControlsEditor(activity: MainActivity) {
-        val profile = NhhControllerRuntime.ensureNhhProfile(activity)
+    fun openControlsEditor(activity: MainActivity, profileId: Int = NhhControllerRuntime.selectedProfileId(activity.getSharedPreferences("nhh", Context.MODE_PRIVATE))) {
+        val profile = NhhControllerRuntime.ensureNhhProfile(activity, profileId)
         activity.startActivity(
             Intent(activity, ControlsEditorActivity::class.java).apply {
                 putExtra("profile_id", profile.id)
@@ -184,7 +184,7 @@ object WinlatorRuntime {
 
     fun resetControlsLayout(context: Context) {
         NhhControllerRuntime.resetNhhProfile(context)
-        appendLaunchLog(context, "Restored NHH Xbox control profile.")
+        appendLaunchLog(context, "Restored both NHH control profiles.")
     }
 
     fun enterDesktop(activity: MainActivity, prefs: SharedPreferences) {
@@ -210,7 +210,7 @@ object WinlatorRuntime {
         if (container == null) {
             return LauncherRuntimeSettings(
                 forceFullscreen = prefs.getBoolean(PREF_FULLSCREEN, true),
-                onScreenControls = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.NHH_PROFILE_ID) != 0,
+                onScreenControls = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.DEFAULT_PROFILE_ID) != 0,
                 preferredInputApi = NhhControllerRuntime.getPreferredInputApi(prefs),
                 overlayOpacity = NhhControllerRuntime.getOverlayOpacity(prefs),
                 controlScale = NhhControllerRuntime.getControlScale(prefs),
@@ -229,7 +229,7 @@ object WinlatorRuntime {
             wineEsync = !container.getEnvVars().split(Regex("\\s+")).contains("WINEESYNC=0"),
             showFpsHud = container.getHUDMode().toInt() != 0,
             forceFullscreen = prefs.getBoolean(PREF_FULLSCREEN, true),
-            onScreenControls = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.NHH_PROFILE_ID) != 0,
+            onScreenControls = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.DEFAULT_PROFILE_ID) != 0,
             preferredInputApi = NhhControllerRuntime.getPreferredInputApi(prefs),
             overlayOpacity = NhhControllerRuntime.getOverlayOpacity(prefs),
             controlScale = NhhControllerRuntime.getControlScale(prefs),
@@ -260,7 +260,7 @@ object WinlatorRuntime {
         container.saveData()
 
         prefs.edit()
-            .putInt(PREF_PROFILE, if (settings.onScreenControls) NhhControllerRuntime.NHH_PROFILE_ID else 0)
+            .putInt(PREF_PROFILE, if (settings.onScreenControls) NhhControllerRuntime.selectedProfileId(prefs) else 0)
             .putBoolean(PREF_FULLSCREEN, settings.forceFullscreen)
             .apply()
 
@@ -286,8 +286,8 @@ object WinlatorRuntime {
         val executable = File(path).canonicalFile
         require(executable.isFile) { "The selected executable is missing." }
 
-        val profileId = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.NHH_PROFILE_ID)
-        if (profileId != 0) NhhControllerRuntime.ensureNhhProfile(context)
+        val profileId = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.DEFAULT_PROFILE_ID)
+        if (profileId != 0) NhhControllerRuntime.ensureNhhProfile(context, profileId)
 
         val intent = Intent(context, XServerDisplayActivity::class.java).apply {
             putExtra("container_id", container.id)

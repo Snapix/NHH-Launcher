@@ -5,7 +5,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Build
-import android.provider.Settings
 import android.content.pm.PackageManager
 import android.view.Gravity
 import android.view.View
@@ -43,7 +42,7 @@ class CastActivity : ComponentActivity() {
         }
 
         val title = TextView(this).apply {
-            text = "Cast"
+            text = "Chromecast"
             textSize = 24f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER_VERTICAL)
@@ -51,7 +50,7 @@ class CastActivity : ComponentActivity() {
         root.addView(title, LinearLayout.LayoutParams(-1, 64))
 
         status = TextView(this).apply {
-            text = "Searching for Cast devices…"
+            text = "Searching for Chromecast devices…"
             textSize = 15f
             setTextColor(Color.LTGRAY)
         }
@@ -61,18 +60,6 @@ class CastActivity : ComponentActivity() {
             orientation = LinearLayout.VERTICAL
         }
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        val wireless = Button(this).apply {
-            text = "WIRELESS DISPLAY"
-            setOnClickListener {
-                runCatching {
-                    startActivity(Intent("android.settings.CAST_SETTINGS"))
-                }.recoverCatching {
-                    startActivity(Intent(Settings.ACTION_SETTINGS))
-                }
-            }
-        }
-        root.addView(wireless, LinearLayout.LayoutParams(-1, 54))
 
         val close = Button(this).apply {
             text = "CLOSE"
@@ -87,7 +74,7 @@ class CastActivity : ComponentActivity() {
             discovery.flow.collect { devices ->
                 list.removeAllViews()
                 status.text = if (devices.isEmpty()) {
-                    "No Chromecast or Google Cast device found."
+                    "No Chromecast found on this Wi-Fi network."
                 } else {
                     "Select a display"
                 }

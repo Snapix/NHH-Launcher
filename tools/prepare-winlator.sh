@@ -283,7 +283,13 @@ s = p.read_text()
 if "private boolean nhhSession;" not in s:
     s = s.replace(
         "private String screenEffectProfile;",
-        "private String screenEffectProfile;\n    private boolean nhhSession;\n    private static final int NHH_CAST_REQUEST_CODE = 0x4E48;",
+        "private String screenEffectProfile;\n    private boolean nhhSession;\n    private boolean isNhhSession;\n    private static final int NHH_CAST_REQUEST_CODE = 0x4E48;",
+        1
+    )
+else:
+    s = s.replace(
+        "private boolean nhhSession;\n    private static final int NHH_CAST_REQUEST_CODE",
+        "private boolean nhhSession;\n    private boolean isNhhSession;\n    private static final int NHH_CAST_REQUEST_CODE",
         1
     )
 if "nhhSession = getIntent().hasExtra" not in s:

@@ -237,6 +237,10 @@ for name in sys.argv[1:]:
         text = text.replace(old, new)
     path.write_text(text)
 PY
+if grep -R -F "/data/data/com.winlator/" "$WINLATOR_APP/src/main/java" "$WINLATOR_APP/src/main/cpp"; then
+    echo "A stale upstream sandbox path still points at the old application ID." >&2
+    exit 1
+fi
 
 # Rename the native background-session notification and app strings for NHH.
 FOREGROUND_SERVICE="$WINLATOR_APP/src/main/java/com/winlator/services/ForegroundService.java"

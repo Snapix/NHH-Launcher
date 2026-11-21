@@ -98,7 +98,7 @@ object NhhControllerRuntime {
         activity: Activity,
         inputControlsView: InputControlsView,
         xServer: XServer?,
-        profileId: Int = NHH_PROFILE_ID
+        profileId: Int = DEFAULT_PROFILE_ID
     ) {
         val prefs = activity.getSharedPreferences("nhh", Context.MODE_PRIVATE)
         val profile = ensureNhhProfile(activity, profileId)

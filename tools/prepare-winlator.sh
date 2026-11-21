@@ -206,7 +206,17 @@ if "com.snapix.nhhlauncher.cast.CastActivity" not in s:
 p.write_text(s)
 PY
 
-# 5. Patch the Winlator display session for NHH game mode and keep native Winlator desktop mode intact.
+# Give NHH a unique FileProvider authority matching its application ID.
+FILE_UTILS="$WINLATOR_APP/src/main/java/com/winlator/core/FileUtils.java"
+python3 - "$FILE_UTILS" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text().replace('"com.winlator.FileProvider"', '"com.noheroshere.snap.FileProvider"')
+p.write_text(s)
+PY
+
+# 5. Patch the display session for NHH game mode and keep native Winlator desktop mode intact.
 XSERVER_DISPLAY="$WINLATOR_APP/src/main/java/com/winlator/XServerDisplayActivity.java"
 python3 - "$XSERVER_DISPLAY" <<'PY'
 from pathlib import Path
@@ -525,6 +535,7 @@ if "com.snapix.nhhlauncher.OnboardingActivity" not in s:
     s=s.replace(anchor,block+anchor,1)
 s=s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/nhh_icon"')
 s=s.replace('android:label="@string/app_name"', 'android:label="No Heroes Here"')
+s=s.replace('android:authorities="com.winlator.FileProvider"', 'android:authorities="com.noheroshere.snap.FileProvider"')
 p.write_text(s)
 PY
 

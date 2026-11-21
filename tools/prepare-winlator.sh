@@ -444,8 +444,10 @@ s = p.read_text()
 
 old_map = "updateCursorVisibility();\n                    preloaderDialog.closeOnUiThread();"
 new_map = """updateCursorVisibility();
-                    if (nhhSession) com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(
-                            findViewById(R.id.FLXServerDisplay)
+                    if (nhhSession) runOnUiThread(() ->
+                            com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(
+                                    findViewById(R.id.FLXServerDisplay)
+                            )
                     );
                     preloaderDialog.closeOnUiThread();"""
 if "NhhStartupOverlay.dismiss(" not in s:

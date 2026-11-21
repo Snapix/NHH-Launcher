@@ -111,7 +111,7 @@ class CastActivity : ComponentActivity() {
             putExtra(CastForegroundService.EXTRA_RESOLUTION, "P720")
             putExtra(CastForegroundService.EXTRA_SEGMENT_DURATION, 1.0)
             putExtra(CastForegroundService.EXTRA_WINDOW_SIZE, 3)
-            putExtra(CastForegroundService.EXTRA_LIVE_EDGE, 1.0)
+            putExtra(CastForegroundService.EXTRA_LIVE_EDGE, 0.5)
         }
         setResult(RESULT_OK, result)
         finish()

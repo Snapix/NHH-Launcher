@@ -505,7 +505,7 @@ worker_new = """        Executors.newSingleThreadExecutor().execute(() -> {
                 else throw new RuntimeException(error);
             }
         });"""
-if "NhhStartupOverlay.showError(" not in s:
+if "The game environment could not start." not in s:
     if worker_old not in s:
         raise SystemExit("XServer startup worker marker not found")
     s = s.replace(worker_old, worker_new, 1)

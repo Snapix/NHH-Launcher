@@ -387,7 +387,7 @@ private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> U
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Import Game ZIP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "Extract the game, create its Winlator container, map the game as G:, and preload the NHH Xbox control profile.",
+                    "Extract the game files, prepare the game environment, map the game drive, and install the NHH controller layouts.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Button(onClick = onSelectZip, modifier = Modifier.fillMaxWidth().height(56.dp)) {

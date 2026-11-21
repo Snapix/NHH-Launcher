@@ -106,8 +106,8 @@ if "NHH_INSTALL_PROGRESS" not in s:
         1
     )
     s = s.replace(
-        "if (!activity.getClass().getName().equals("com.snapix.nhhlauncher.OnboardingActivity")) dialog.show(R.string.installing_system_files);",
-        "NHH_INSTALL_PROGRESS = 0; NHH_INSTALL_RUNNING = true; dialog.show(R.string.installing_system_files);",
+        'dialog.show(R.string.installing_system_files);',
+        'NHH_INSTALL_PROGRESS = 0; NHH_INSTALL_RUNNING = true; if (!activity.getClass().getName().equals("com.snapix.nhhlauncher.OnboardingActivity")) dialog.show(R.string.installing_system_files);',
         1
     )
     s = s.replace(

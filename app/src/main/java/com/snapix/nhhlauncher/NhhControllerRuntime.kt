@@ -86,7 +86,7 @@ object NhhControllerRuntime {
 
         val profileFile = ControlsProfile.getProfileFile(context, profileId)
         val profile = InputControlsManager.loadProfile(context, profileFile)
-            ?: throw IllegalStateException("Winlator controller profile #$profileId could not be loaded.")
+            ?: throw IllegalStateException("NHH controller layout #$profileId could not be loaded.")
         profile.loadControllers()
         return profile
     }

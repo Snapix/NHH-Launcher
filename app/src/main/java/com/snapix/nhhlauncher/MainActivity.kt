@@ -8,7 +8,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,11 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.winlator.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -199,7 +195,7 @@ private fun NhhApp(activity: MainActivity) {
 
                 gameExe == null || !File(gameExe!!).isFile -> SetupScreen(
                     error,
-                    { finish() },
+                    { activity.finish() },
                     { picker.launch(arrayOf("application/zip", "application/octet-stream")) }
                 )
 
@@ -279,12 +275,12 @@ private fun MainMenu(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                painterResource(R.drawable.nhh_logo),
-                "NHH",
-                Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)),
-                contentScale = ContentScale.Crop
-            )
+            Box(
+                Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("NHH", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimary)
+            }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("No Heroes Here", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
@@ -295,18 +291,11 @@ private fun MainMenu(
             }
         }
 
-        Box(Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(24.dp))) {
-            Image(
-                painterResource(R.drawable.nhh_banner),
-                "No Heroes Here",
-                Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color(0xDD140B0B)))
-                )
-            )
+        Box(
+            Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(24.dp))
+                .background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.surfaceContainerHigh, Color(0xDD140B0B)))),
+            contentAlignment = Alignment.BottomStart
+        ) {
             Text(
                 "NHH XBOX CONTROLLER READY",
                 Modifier.align(Alignment.BottomStart).padding(16.dp),
@@ -375,12 +364,13 @@ private fun SetupScreen(error: String?, onBack: () -> Unit, onSelectZip: () -> U
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
             Text("NHH Launcher Setup", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         }
-        Image(
-            painterResource(R.drawable.nhh_banner),
-            null,
-            Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(24.dp)),
-            contentScale = ContentScale.Crop
-        )
+        Box(
+            Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(24.dp))
+                .background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.surfaceContainerHigh, Color(0xDD140B0B)))),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("NO HEROES HERE", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        }
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Import Game ZIP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

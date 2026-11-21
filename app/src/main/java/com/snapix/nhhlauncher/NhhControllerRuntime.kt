@@ -61,6 +61,7 @@ object NhhControllerRuntime {
         listeners.forEach { it(snapshot) }
     }
 
+    @JvmStatic
     fun ensureNhhProfile(context: Context, forceReset: Boolean = false): ControlsProfile {
         val manager = InputControlsManager(context)
         var profile = manager.getProfile(NHH_PROFILE_ID)
@@ -87,6 +88,7 @@ object NhhControllerRuntime {
         ensureNhhProfile(context, true)
     }
 
+    @JvmStatic
     fun attachToSession(
         activity: Activity,
         inputControlsView: InputControlsView,
@@ -162,6 +164,7 @@ object NhhControllerRuntime {
         }
     }
 
+    @JvmStatic
     fun onSessionPaused() {
         attachedView?.visibility = View.GONE
         update {
@@ -172,6 +175,7 @@ object NhhControllerRuntime {
         }
     }
 
+    @JvmStatic
     fun onSessionResumed(activity: Activity) {
         val view = attachedView ?: return
         view.visibility = View.VISIBLE
@@ -189,6 +193,7 @@ object NhhControllerRuntime {
         }
     }
 
+    @JvmStatic
     fun onViewportChanged(activity: Activity, view: InputControlsView) {
         if (attachedView !== view) return
         attachedProfile?.loadElements(view)
@@ -202,6 +207,7 @@ object NhhControllerRuntime {
         }
     }
 
+    @JvmStatic
     fun detachFromSession() {
         attachedView?.visibility = View.GONE
         attachedView = null
@@ -209,6 +215,7 @@ object NhhControllerRuntime {
         update { DiagnosticsSnapshot() }
     }
 
+    @JvmStatic
     fun recordDispatchedEvent(description: String) {
         update {
             it.copy(
@@ -220,6 +227,7 @@ object NhhControllerRuntime {
         }
     }
 
+    @JvmStatic
     fun applySafeAreaInsets(activity: Activity, view: View) {
         view.requestApplyInsets()
     }

@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -237,13 +238,7 @@ private fun NhhApp(activity: MainActivity) {
                             }
                         }
                     },
-                    onEditControls = {
-                        try {
-                            WinlatorRuntime.openControlsEditor(activity)
-                        } catch (t: Throwable) {
-                            error = t.message ?: "Could not open controls editor."
-                        }
-                    },
+                    onEditControls = { activity.startActivity(Intent(activity, ControlsActivity::class.java)) },
                     onTestController = { screen = LauncherScreen.CONTROLLER_TEST },
                     onEnterDesktop = {
                         scope.launch {

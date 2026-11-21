@@ -191,7 +191,7 @@ if "isNhhGameMode" not in s:
     s = s.replace(marker, insert, 1)
 
 # NHH's Compose launcher owns bootstrap progress; desktop/game sessions still use the native XServer activity.
-s = s.replace("preloaderDialog.show(R.string.starting_up);", "if (!getIntent().getBooleanExtra("nhh_desktop_mode", false)) { /* NHH launcher owns game bootstrap UI. */ }", 1)
+s = s.replace('preloaderDialog.show(R.string.starting_up);', '/* NHH launcher owns game bootstrap UI. */', 1)
 
 if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not in s:
     marker = '''        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));'''

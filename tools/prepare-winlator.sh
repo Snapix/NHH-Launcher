@@ -1,1 +1,279 @@
-#!/usr/bin/env bash set -euo pipefail # Winlator runtime source is pinned as a Git submodule. WINLATOR_ROOT="winlator-app" WINLATOR_APP="$WINLATOR_ROOT/app" NHH_SOURCE="app/src/main/java/com/snapix/nhhlauncher" if [[ ! -d "$WINLATOR_APP" ]]; then echo "Winlator submodule is missing. Run: git submodule update --init --recursive" exit 1 fi # 1. Configure Kotlin + Jetpack Compose in the upstream Winlator app build.gradle python3 - "$WINLATOR_APP/build.gradle" <<'PY' from pathlib import Path import sys p = Path(sys.argv[1]) s = p.read_text() if "apply plugin: 'org.jetbrains.kotlin.android'" not in s: s = s.replace( "apply plugin: 'com.android.application'", "apply plugin: 'com.android.application'\napply plugin: 'org.jetbrains.kotlin.android'", 1 ) if "composeOptions" not in s: s = s.replace( "android {\n", """android { buildFeatures { compose true } composeOptions { kotlinCompilerExtensionVersion '1.5.14' } compileOptions { sourceCompatibility JavaVersion.VERSION_17 targetCompatibility JavaVersion.VERSION_17 } kotlinOptions { jvmTarget = '17' } """, 1 ) needle = "dependencies {" if "androidx.activity:activity-compose:1.9.3" not in s: s = s.replace( needle, """dependencies { implementation 'androidx.core:core-ktx:1.13.1' implementation 'androidx.activity:activity-compose:1.9.3' implementation 'androidx.compose.ui:ui:1.7.8' implementation 'androidx.compose.ui:ui-tooling-preview:1.7.8' implementation 'androidx.compose.material3:material3:1.4.0' implementation 'androidx.compose.material:material-icons-extended:1.7.8' """, 1 ) p.write_text(s) PY # 2. Copy all NHH launcher, runtime, controller, test mode, and cast sources mkdir -p "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher" cp "$NHH_SOURCE/MainActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/MainActivity.kt" cp "$NHH_SOURCE/WinlatorRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/WinlatorRuntime.kt" cp "$NHH_SOURCE/LauncherSettingsScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/LauncherSettingsScreen.kt" cp "$NHH_SOURCE/NhhControllerRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/NhhControllerRuntime.kt" cp "$NHH_SOURCE/ControllerTestScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControllerTestScreen.kt" rm -rf "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/cast" cp -r "$NHH_SOURCE/cast" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/" # 3. Guard Winlator MainActivity so NHH's subclass owns the launcher UI MAIN_ACTIVITY="$WINLATOR_APP/src/main/java/com/winlator/MainActivity.java" python3 - "$MAIN_ACTIVITY" <<'PY' from pathlib import Path import sys p = Path(sys.argv[1]) s = p.read_text() needle = " super.onCreate(savedInstanceState);\n" guard = " if (getIntent().getBooleanExtra(\"nhh_launcher\", false)) return;\n" if guard not in s: if needle not in s: raise SystemExit("Could not locate Winlator MainActivity onCreate") s = s.replace(needle, needle + guard, 1) p.write_text(s) PY # 4. Patch AndroidManifest.xml (Launcher activity + Cast permissions & services) MANIFEST="$WINLATOR_APP/src/main/AndroidManifest.xml" python3 - "$MANIFEST" <<'PY' from pathlib import Path import re import sys p = Path(sys.argv[1]) s = p.read_text() if 'com.snapix.nhhlauncher.MainActivity' not in s: pattern = re.compile( r'\s*<activity android:name="com\.winlator\.MainActivity"(?P<body>.*?)</activity>', re.S ) m = pattern.search(s) if not m: raise SystemExit("Could not locate Winlator MainActivity in manifest") replacement = ''' <activity android:name="com.winlator.MainActivity" android:theme="@style/AppThemeDark" android:exported="false" android:screenOrientation="sensor" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" /> <activity android:name="com.snapix.nhhlauncher.MainActivity" android:theme="@style/AppThemeDark" android:exported="true" android:screenOrientation="sensor" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"> <intent-filter> <action android:name="android.intent.action.MAIN"/> <category android:name="android.intent.category.LAUNCHER"/> </intent-filter> </activity>''' s = s[:m.start()] + "\n" + replacement + s[m.end():] for perm in [ ' <uses-permission android:name="android.permission.INTERNET" />', ' <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />', ' <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />', ' <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />', ' <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />', ' <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />', ' <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />', ' <uses-permission android:name="android.permission.WAKE_LOCK" />', ]: if perm not in s: s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' + perm, 1) marker = ' <activity android:name="com.snapix.nhhlauncher.MainActivity"' idx = s.find(marker) if idx < 0: raise SystemExit("NHH MainActivity manifest entry not found") if 'com.snapix.nhhlauncher.cast.CastActivity' not in s: block = ''' <activity android:name="com.snapix.nhhlauncher.cast.CastActivity" android:exported="false" android:screenOrientation="portrait" /> <activity android:name="com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" android:exported="false" /> <service android:name="com.snapix.nhhlauncher.cast.CastForegroundService" android:foregroundServiceType="mediaProjection" android:exported="false" /> ''' s = s[:idx] + block + s[idx:] p.write_text(s) PY # 5. Patch RootFSInstaller so NHH displays native Compose bootstrap progress ROOTFS_INSTALLER="$WINLATOR_APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java" python3 - "$ROOTFS_INSTALLER" <<'PY' from pathlib import Path import sys p = Path(sys.argv[1]) s = p.read_text() if "NHH_INSTALL_PROGRESS" not in s: start = s.find(" public static void install(final MainActivity activity) {") end = s.find(" public static void installIfNeeded", start) if start < 0 or end < 0: raise SystemExit("RootFSInstaller.install block not found") method = r''' public static void install(final MainActivity activity) { AppUtils.keepScreenOn(activity); RootFS rootFS = RootFS.find(activity); final File rootDir = rootFS.getRootDir(); SettingsFragment.resetPreferenceVersions(activity); NHH_INSTALL_PROGRESS = 0; NHH_INSTALL_RUNNING = true; Executors.newSingleThreadExecutor().execute(() -> { boolean success = false; try { clearRootDir(rootDir); final long contentLength = TarCompressorUtils.getContentLength( TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir ); AtomicLong totalSizeRef = new AtomicLong(); success = TarCompressorUtils.extract( TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir, (file, size) -> { if (size > 0 && contentLength > 0) { long totalSize = totalSizeRef.addAndGet(size); NHH_INSTALL_PROGRESS = Math.max( 0, Math.min(100, (int)(((float) totalSize / contentLength) * 100)) ); } return file; } ); if (success) { activity.runOnUiThread(() -> { rootFS.createRFSVersionFile(LATEST_VERSION); resetContainerRFSVersions(activity); }); } else { activity.runOnUiThread(() -> AppUtils.showToast(activity, R.string.unable_to_install_system_files) ); } } catch (Throwable t) { android.util.Log.e("NHHRootFS", "System file installation failed", t); activity.runOnUiThread(() -> AppUtils.showToast(activity, R.string.unable_to_install_system_files) ); } finally { NHH_INSTALL_PROGRESS = success ? 100 : -1; NHH_INSTALL_RUNNING = false; } }); } ''' s = s[:start] + method + s[end:] s = s.replace( 'public static final String FILENAME = "rootfs.tzst";', '''public static final String FILENAME = "rootfs.tzst"; private static volatile int NHH_INSTALL_PROGRESS = 0; private static volatile boolean NHH_INSTALL_RUNNING = false; public static int getNhhInstallProgress() { return NHH_INSTALL_PROGRESS; } public static boolean isNhhInstallRunning() { return NHH_INSTALL_RUNNING; }''' ) p.write_text(s) PY # 6. Download No Heroes Here Steam artwork into drawables ASSET_DIR="$WINLATOR_APP/src/main/res/drawable-nodpi" mkdir -p "$ASSET_DIR" [[ -f "$ASSET_DIR/nhh_banner.jpg" ]] || curl -fL --retry 3 --retry-delay 1 "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/696140/header.jpg" -o "$ASSET_DIR/nhh_banner.jpg" [[ -f "$ASSET_DIR/nhh_poster.jpg" ]] || curl -fL --retry 3 --retry-delay 1 "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/696140/library_600x900.jpg" -o "$ASSET_DIR/nhh_poster.jpg" [[ -f "$ASSET_DIR/nhh_logo.png" ]] || curl -fL --retry 3 --retry-delay 1 "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/696140/logo.png" -o "$ASSET_DIR/nhh_logo.png" # 7. Patch ControlsEditorActivity so editor safe-area insets match runtime 1:1 CONTROLS_EDITOR="$WINLATOR_APP/src/main/java/com/winlator/ControlsEditorActivity.java" if [[ -f "$CONTROLS_EDITOR" ]]; then python3 - "$CONTROLS_EDITOR" <<'PY' from pathlib import Path import sys p = Path(sys.argv[1]) s = p.read_text() if "NhhControllerRuntime.applySafeAreaInsets" not in s: marker = "inputControlsView.setProfile(profile);" if marker in s: s = s.replace( marker, marker + "\n if (getIntent().getBooleanExtra(\"nhh_editor_safe_area\", false)) { com.snapix.nhhlauncher.NhhControllerRuntime.applySafeAreaInsets(this, inputControlsView); }", 1 ) p.write_text(s) PY fi # 8. Patch InputControlsView to guarantee reliable multi-touch -> WinHandler.sendGamepadState dispatch INPUT_CONTROLS_VIEW="$WINLATOR_APP/src/main/java/com/winlator/widget/InputControlsView.java" if [[ -f "$INPUT_CONTROLS_VIEW" ]]; then python3 - "$INPUT_CONTROLS_VIEW" <<'PY' from pathlib import Path import sys p = Path(sys.argv[1]) s = p.read_text() if "NhhControllerRuntime.recordDispatchedEvent" not in s: needle = "winHandler.sendGamepadState();" if needle in s: s = s.replace( needle, needle + "\n com.snapix.nhhlauncher.NhhControllerRuntime.recordDispatchedEvent(\"GamepadState -> WinHandler\");" ) p.write_text(s) PY fi # 9. Patch XServerDisplayActivity for full NHH controller lifecycle, Desktop Mode, and safe-area overlay XSERVER_DISPLAY="$WINLATOR_APP/src/main/java/com/winlator/XServerDisplayActivity.java" python3 - "$XSERVER_DISPLAY" <<'PY' from pathlib import Path import sys p = Path(sys.argv[1]) s = p.read_text() if "nhhMenuOverlay" not in s: s = s.replace( 'NavigationView navigationView = findViewById(R.id.NavigationView);', '''NavigationView navigationView = findViewById(R.id.NavigationView); boolean isNhhGameMode = getIntent().hasExtra("nhh_controls_profile_id") && !getIntent().getBooleanExtra("nhh_desktop_mode", false); if (isNhhGameMode) { navigationView.setVisibility(View.GONE); drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED); }''', 1 ) s = s.replace( 'preloaderDialog.show(R.string.updating_system_files);', '/* NHH owns the bootstrap surface. */' ) s = s.replace( 'preloaderDialog.show(R.string.starting_up);', '/* NHH owns the launch surface. */' ) needle = ''' if (shortcut != null) { String controlsProfile = shortcut.getExtra("controlsProfile"); if (!controlsProfile.isEmpty()) { ControlsProfile profile = inputControlsManager.getProfile(Integer.parseInt(controlsProfile)); if (profile != null) showInputControls(profile); } } if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));''' replacement = ''' if (shortcut != null) { String controlsProfile = shortcut.getExtra("controlsProfile"); if (!controlsProfile.isEmpty()) { ControlsProfile profile = inputControlsManager.getProfile(Integer.parseInt(controlsProfile)); if (profile != null) showInputControls(profile); } } if (getIntent().hasExtra("nhh_controls_profile_id") && !getIntent().getBooleanExtra("nhh_desktop_mode", false)) { int profileId = getIntent().getIntExtra("nhh_controls_profile_id", com.snapix.nhhlauncher.NhhControllerRuntime.NHH_PROFILE_ID); if (profileId > 0) { ControlsProfile profile = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, false); showInputControls(profile); com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession(this, inputControlsView, xServer, profile.id); } else { hideInputControls(); } if (getIntent().getBooleanExtra("nhh_force_fullscreen", true) && xServerView != null && xServerView.getRenderer() != null) { xServerView.post(() -> { if (!xServerView.getRenderer().isFullscreen()) xServerView.getRenderer().toggleFullscreen(); }); } setupNhhOverlay(rootView); } if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));''' if needle not in s: raise SystemExit("setupUI input-control block not found") s = s.replace(needle, replacement, 1) # Lifecycle hooks: pause, resume, destroy, configurationChanged if "NhhControllerRuntime.onSessionPaused()" not in s: s = s.replace( " @Override\n public void onPause() {\n", " @Override\n public void onPause() {\n com.snapix.nhhlauncher.NhhControllerRuntime.onSessionPaused();\n", 1 ) if "NhhControllerRuntime.onSessionResumed(this)" not in s: s = s.replace( " @Override\n public void onResume() {\n", " @Override\n public void onResume() {\n com.snapix.nhhlauncher.NhhControllerRuntime.onSessionResumed(this);\n", 1 ) if "NhhControllerRuntime.detachFromSession()" not in s: s = s.replace( " @Override\n public void onDestroy() {\n", " @Override\n public void onDestroy() {\n com.snapix.nhhlauncher.NhhControllerRuntime.detachFromSession();\n", 1 ) old_back = ''' @Override public void onBackPressed() { if (environment != null) { if (!drawerLayout.isDrawerOpen(GravityCompat.START)) { drawerLayout.openDrawer(GravityCompat.START); } else drawerLayout.closeDrawers(); } }''' new_back = ''' @Override public void onBackPressed() { if (nhhMenuOverlay != null) { nhhMenuOverlay.setVisibility(nhhMenuOverlay.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE); return; } if (environment != null) { if (!drawerLayout.isDrawerOpen(GravityCompat.START)) { drawerLayout.openDrawer(GravityCompat.START); } else drawerLayout.closeDrawers(); } }''' if old_back in s: s = s.replace(old_back, new_back, 1) # Cast activity result hook res_needle = """ if (requestCode == MainActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE && resultCode == Activity.RESULT_OK) { if (editInputControlsCallback != null) { editInputControlsCallback.run(); editInputControlsCallback = null; } }""" res_replacement = """ if (requestCode == 7101 && resultCode == Activity.RESULT_OK && data != null) { com.snapix.nhhlauncher.NhhControllerRuntime.onSessionPaused(); Intent projection = new Intent(this, com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity.class); projection.putExtras(data); startActivity(projection); return; } """ + res_needle if res_needle in s and "requestCode == 7101" not in s: s = s.replace(res_needle, res_replacement, 1) insert_at = s.rfind("\n}") method = r''' private android.widget.FrameLayout nhhMenuOverlay; @Override public void onConfigurationChanged(android.content.res.Configuration newConfig) { super.onConfigurationChanged(newConfig); if (inputControlsView != null && getIntent().hasExtra("nhh_controls_profile_id")) { com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(this, inputControlsView); } } private void setupNhhOverlay(FrameLayout rootView) { final float density = getResources().getDisplayMetrics().density; final android.widget.FrameLayout menu = new android.widget.FrameLayout(this); nhhMenuOverlay = menu; menu.setVisibility(View.GONE); menu.setClickable(true); menu.setFocusable(true); menu.setBackgroundColor(0xD6140B0B); final android.widget.LinearLayout panel = new android.widget.LinearLayout(this); panel.setOrientation(android.widget.LinearLayout.VERTICAL); int pad = (int)(22 * density); panel.setPadding(pad, (int)(18 * density), pad, (int)(18 * density)); android.graphics.drawable.GradientDrawable panelBg = new android.graphics.drawable.GradientDrawable(); panelBg.setColor(0xF5291717); panelBg.setStroke((int)(2 * density), 0xFF8C4A42); panelBg.setCornerRadius(28 * density); panel.setBackground(panelBg); final android.widget.TextView title = new android.widget.TextView(this); title.setText("No Heroes Here"); title.setTextColor(0xFFFCEBE7); title.setTextSize(20); title.setTypeface(null, android.graphics.Typeface.BOLD); panel.addView(title); final android.widget.TextView subtitle = new android.widget.TextView(this); subtitle.setText("XINPUT SESSION MENU"); subtitle.setTextColor(0xFFFFC168); subtitle.setTextSize(11); panel.addView(subtitle); android.widget.Button resume = new android.widget.Button(this); resume.setText("RESUME"); android.widget.Button controls = new android.widget.Button(this); controls.setText("TOGGLE TOUCH CONTROLS"); android.widget.Button editLayout = new android.widget.Button(this); editLayout.setText("EDIT XBOX LAYOUT"); android.widget.Button fullscreen = new android.widget.Button(this); fullscreen.setText("TOGGLE FULLSCREEN"); android.widget.Button cast = new android.widget.Button(this); cast.setText("CAST TO TV"); android.widget.Button exit = new android.widget.Button(this); exit.setText("EXIT GAME"); android.widget.LinearLayout.LayoutParams buttonLp = new android.widget.LinearLayout.LayoutParams(-1, (int)(48 * density)); buttonLp.topMargin = (int)(8 * density); panel.addView(resume, new android.widget.LinearLayout.LayoutParams(buttonLp)); panel.addView(controls, new android.widget.LinearLayout.LayoutParams(buttonLp)); panel.addView(editLayout, new android.widget.LinearLayout.LayoutParams(buttonLp)); panel.addView(fullscreen, new android.widget.LinearLayout.LayoutParams(buttonLp)); panel.addView(cast, new android.widget.LinearLayout.LayoutParams(buttonLp)); panel.addView(exit, new android.widget.LinearLayout.LayoutParams(buttonLp)); menu.addView(panel, new android.widget.FrameLayout.LayoutParams( (int)(310 * density), -2, android.view.Gravity.CENTER )); rootView.addView(menu, new android.widget.FrameLayout.LayoutParams(-1, -1)); android.widget.Button trigger = new android.widget.Button(this); trigger.setText("NHH"); trigger.setTextColor(0xFFFCEBE7); trigger.setTextSize(11); android.graphics.drawable.GradientDrawable triggerBg = new android.graphics.drawable.GradientDrawable(); triggerBg.setColor(0xCC291717); triggerBg.setStroke((int)(1.5f * density), 0xFFFF6B57); triggerBg.setCornerRadius(24 * density); trigger.setBackground(triggerBg); trigger.setOnClickListener(v -> { boolean opening = menu.getVisibility() != View.VISIBLE; if (opening) com.snapix.nhhlauncher.NhhControllerRuntime.onSessionPaused(); else com.snapix.nhhlauncher.NhhControllerRuntime.onSessionResumed(this); menu.setVisibility(opening ? View.VISIBLE : View.GONE); }); android.widget.FrameLayout.LayoutParams triggerLp = new android.widget.FrameLayout.LayoutParams( (int)(58 * density), (int)(36 * density), android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL ); triggerLp.topMargin = (int)(8 * density); rootView.addView(trigger, triggerLp); resume.setOnClickListener(v -> { menu.setVisibility(View.GONE); com.snapix.nhhlauncher.NhhControllerRuntime.onSessionResumed(this); }); controls.setOnClickListener(v -> { boolean show = inputControlsView.getVisibility() != View.VISIBLE; inputControlsView.setShowTouchscreenControls(show); inputControlsView.setVisibility(show ? View.VISIBLE : View.GONE); if (show) { com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession( this, inputControlsView, xServer, com.snapix.nhhlauncher.NhhControllerRuntime.NHH_PROFILE_ID ); } else { com.snapix.nhhlauncher.NhhControllerRuntime.onSessionPaused(); } menu.setVisibility(View.GONE); }); editLayout.setOnClickListener(v -> { menu.setVisibility(View.GONE); Intent editor = new Intent(this, ControlsEditorActivity.class); editor.putExtra("profile_id", com.snapix.nhhlauncher.NhhControllerRuntime.NHH_PROFILE_ID); editor.putExtra("nhh_editor_safe_area", true); editInputControlsCallback = () -> { ControlsProfile refreshed = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, false); showInputControls(refreshed); com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession(this, inputControlsView, xServer, refreshed.id); }; startActivityForResult(editor, MainActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE); }); fullscreen.setOnClickListener(v -> { xServerView.getRenderer().toggleFullscreen(); menu.setVisibility(View.GONE); }); cast.setOnClickListener(v -> { startActivityForResult(new Intent(this, com.snapix.nhhlauncher.cast.CastActivity.class), 7101); menu.setVisibility(View.GONE); }); exit.setOnClickListener(v -> { com.snapix.nhhlauncher.NhhControllerRuntime.detachFromSession(); finish(); }); } ''' s = s[:insert_at] + method + s[insert_at:] p.write_text(s) PY echo "Prepared the full Winlator application with NHH Material 3 Expressive UI, safe-area XInput controller runtime, and Desktop Mode."
+#!/usr/bin/env bash
+set -euo pipefail
+
+WINLATOR_ROOT="winlator-app"
+WINLATOR_APP="$WINLATOR_ROOT/app"
+NHH_SOURCE="app/src/main/java/com/snapix/nhhlauncher"
+
+[[ -d "$WINLATOR_APP" ]] || { echo "Winlator submodule is missing"; exit 1; }
+
+echo "Preparing NHH launcher sources..."
+
+# 1. Enable Kotlin + Compose in the actual Winlator app module.
+python3 - "$WINLATOR_APP/build.gradle" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+if "org.jetbrains.kotlin.android" not in s:
+    s = s.replace(
+        "apply plugin: 'com.android.application'",
+        "apply plugin: 'com.android.application'\napply plugin: 'org.jetbrains.kotlin.android'",
+        1
+    )
+if "buildFeatures { compose true }" not in s:
+    s = s.replace(
+        "android {",
+        """android {
+    buildFeatures { compose true }
+    composeOptions { kotlinCompilerExtensionVersion '1.5.14' }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+""",
+        1
+    )
+deps = """    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.compose.ui:ui:1.7.8'
+    implementation 'androidx.compose.ui:ui-tooling-preview:1.7.8'
+    implementation 'androidx.compose.material3:material3:1.4.0'
+    implementation 'androidx.compose.material:material-icons-extended:1.7.8'
+"""
+if "androidx.activity:activity-compose:1.9.3" not in s:
+    s = s.replace("dependencies {", "dependencies {\n" + deps, 1)
+p.write_text(s)
+PY
+
+# 2. Copy the NHH launcher UI/runtime into the module that is actually built.
+mkdir -p "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher"
+cp "$NHH_SOURCE/MainActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/MainActivity.kt"
+cp "$NHH_SOURCE/WinlatorRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/WinlatorRuntime.kt"
+cp "$NHH_SOURCE/LauncherSettingsScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/LauncherSettingsScreen.kt"
+cp "$NHH_SOURCE/NhhControllerRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/NhhControllerRuntime.kt"
+cp "$NHH_SOURCE/ControllerTestScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControllerTestScreen.kt"
+rm -rf "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/cast"
+cp -r "$NHH_SOURCE/cast" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/"
+
+# 3. Patch the rootfs installer so NHH can show setup progress without Winlator's launcher UI.
+ROOTFS_INSTALLER="$WINLATOR_APP/src/main/java/com/winlator/xenvironment/RootFSInstaller.java"
+python3 - "$ROOTFS_INSTALLER" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+if "NHH_INSTALL_PROGRESS" not in s:
+    s = s.replace(
+        "public static final String FILENAME = \"rootfs.tzst\";",
+        """public static final String FILENAME = "rootfs.tzst";
+    private static volatile int NHH_INSTALL_PROGRESS = 0;
+    private static volatile boolean NHH_INSTALL_RUNNING = false;
+    public static int getNhhInstallProgress() { return NHH_INSTALL_PROGRESS; }
+    public static boolean isNhhInstallRunning() { return NHH_INSTALL_RUNNING; }""",
+        1
+    )
+    s = s.replace(
+        "public static void install(final MainActivity activity) {",
+        "public static void install(final androidx.appcompat.app.AppCompatActivity activity) {",
+        1
+    )
+    s = s.replace(
+        "public static void installIfNeeded(final MainActivity activity) {",
+        "public static void installIfNeeded(final androidx.appcompat.app.AppCompatActivity activity) {",
+        1
+    )
+    s = s.replace(
+        "dialog.show(R.string.installing_system_files);",
+        "NHH_INSTALL_PROGRESS = 0; NHH_INSTALL_RUNNING = true; dialog.show(R.string.installing_system_files);",
+        1
+    )
+    s = s.replace(
+        "final int progress = (int)(((float)totalSize / contentLength) * 100);",
+        "final int progress = (int)(((float)totalSize / contentLength) * 100); NHH_INSTALL_PROGRESS = Math.max(0, Math.min(100, progress));",
+        1
+    )
+    s = s.replace(
+        "dialog.closeOnUiThread();",
+        "NHH_INSTALL_PROGRESS = success ? 100 : -1; NHH_INSTALL_RUNNING = false; dialog.closeOnUiThread();",
+        1
+    )
+p.write_text(s)
+PY
+
+# 4. Make the Winlator manifest explicitly launch NHH, not Winlator's own MainActivity.
+MANIFEST="$WINLATOR_APP/src/main/AndroidManifest.xml"
+python3 - "$MANIFEST" <<'PY'
+from pathlib import Path
+import re, sys
+p = Path(sys.argv[1])
+s = p.read_text()
+
+pattern = re.compile(r'\s*<activity android:name="com\.winlator\.MainActivity"(?P<body>.*?)</activity>', re.S)
+m = pattern.search(s)
+if not m:
+    raise SystemExit("Winlator MainActivity manifest entry not found")
+
+replacement = '''\n        <activity android:name="com.winlator.MainActivity"
+            android:theme="@style/AppThemeDark"
+            android:exported="false"
+            android:screenOrientation="sensor"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
+
+        <activity android:name="com.snapix.nhhlauncher.MainActivity"
+            android:theme="@style/AppThemeDark"
+            android:exported="true"
+            android:screenOrientation="sensor"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>'''
+s = s[:m.start()] + replacement + s[m.end():]
+
+manifest_match = re.search(r'<manifest\b[^>]*>', s)
+if not manifest_match:
+    raise SystemExit("Manifest opening tag not found")
+manifest_tag = manifest_match.group(0)
+permissions = [
+    '        <uses-permission android:name="android.permission.INTERNET" />',
+    '        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
+    '        <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />',
+    '        <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />',
+    '        <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />',
+    '        <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+    '        <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />',
+    '        <uses-permission android:name="android.permission.WAKE_LOCK" />',
+]
+for perm in permissions:
+    if perm.strip() not in s:
+        s = s.replace(manifest_tag, manifest_tag + "\n" + perm, 1)
+
+if "com.snapix.nhhlauncher.cast.CastActivity" not in s:
+    marker = '        <activity android:name="com.snapix.nhhlauncher.MainActivity"'
+    idx = s.find(marker)
+    block = '''        <activity android:name="com.snapix.nhhlauncher.cast.CastActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity android:name="com.snapix.nhhlauncher.cast.MediaProjectionRequestActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+        <service android:name="com.snapix.nhhlauncher.cast.CastForegroundService"
+            android:foregroundServiceType="mediaProjection"
+            android:exported="false" />
+'''
+    s = s[:idx] + block + s[idx:]
+p.write_text(s)
+PY
+
+# 5. Patch the Winlator display session for NHH game mode and keep native Winlator desktop mode intact.
+XSERVER_DISPLAY="$WINLATOR_APP/src/main/java/com/winlator/XServerDisplayActivity.java"
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+
+if "isNhhGameMode" not in s:
+    marker = "NavigationView navigationView = findViewById(R.id.NavigationView);"
+    insert = '''NavigationView navigationView = findViewById(R.id.NavigationView);
+        boolean isNhhGameMode = getIntent().hasExtra("nhh_controls_profile_id")
+                && !getIntent().getBooleanExtra("nhh_desktop_mode", false);
+        if (isNhhGameMode) {
+            navigationView.setVisibility(View.GONE);
+            drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
+        }'''
+    if marker not in s:
+        raise SystemExit("XServer navigation marker not found")
+    s = s.replace(marker, insert, 1)
+
+# NHH's Compose launcher owns bootstrap progress; desktop/game sessions still use the native XServer activity.
+s = s.replace("preloaderDialog.show(R.string.starting_up);", "if (!getIntent().getBooleanExtra("nhh_desktop_mode", false)) { /* NHH launcher owns game bootstrap UI. */ }", 1)
+
+if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not in s:
+    marker = '''        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));'''
+    replacement = '''        if (getIntent().hasExtra("nhh_controls_profile_id")
+                && !getIntent().getBooleanExtra("nhh_desktop_mode", false)) {
+            ControlsProfile profile = com.snapix.nhhlauncher.NhhControllerRuntime.ensureNhhProfile(this, false);
+            showInputControls(profile);
+            com.snapix.nhhlauncher.NhhControllerRuntime.attachToSession(this, inputControlsView, xServer, profile.id);
+            if (getIntent().getBooleanExtra("nhh_force_fullscreen", true)) {
+                xServerView.post(() -> {
+                    if (!xServerView.getRenderer().isFullscreen()) xServerView.getRenderer().toggleFullscreen();
+                });
+            }
+        }
+
+        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));'''
+    if marker not in s:
+        raise SystemExit("XServer setupUI marker not found")
+    s = s.replace(marker, replacement, 1)
+
+if "NhhControllerRuntime.onSessionPaused();" not in s:
+    s=s.replace("public void onPause() {", "public void onPause() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.onSessionPaused();", 1)
+if "NhhControllerRuntime.onSessionResumed(this);" not in s:
+    s=s.replace("public void onResume() {", "public void onResume() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.onSessionResumed(this);", 1)
+if "NhhControllerRuntime.detachFromSession();" not in s:
+    s=s.replace("protected void onDestroy() {", "protected void onDestroy() {\n        com.snapix.nhhlauncher.NhhControllerRuntime.detachFromSession();", 1)
+
+if "nhhMenuOverlay" not in s:
+    idx=s.rfind("\n}")
+    method=r'''
+    private android.widget.FrameLayout nhhMenuOverlay;
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (inputControlsView != null && getIntent().hasExtra("nhh_controls_profile_id")) {
+            com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(this, inputControlsView);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (getIntent().hasExtra("nhh_controls_profile_id")
+                && !getIntent().getBooleanExtra("nhh_desktop_mode", false)
+                && nhhMenuOverlay != null) {
+            nhhMenuOverlay.setVisibility(nhhMenuOverlay.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+            return;
+        }
+        if (environment != null) {
+            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) drawerLayout.openDrawer(GravityCompat.START);
+            else drawerLayout.closeDrawers();
+        }
+    }
+'''
+    s=s[:idx]+method+s[idx:]
+p.write_text(s)
+PY
+
+# 6. Patch editor/runtime input dispatch and safe-area parity.
+CONTROLS_EDITOR="$WINLATOR_APP/src/main/java/com/winlator/ControlsEditorActivity.java"
+if [[ -f "$CONTROLS_EDITOR" ]]; then
+python3 - "$CONTROLS_EDITOR" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); s=p.read_text()
+needle="inputControlsView.setProfile(profile);"
+if "nhh_editor_safe_area" not in s and needle in s:
+    s=s.replace(needle, needle+'\n        if (getIntent().getBooleanExtra("nhh_editor_safe_area", false)) com.snapix.nhhlauncher.NhhControllerRuntime.applySafeAreaInsets(this, inputControlsView);',1)
+p.write_text(s)
+PY
+fi
+
+INPUT_CONTROLS_VIEW="$WINLATOR_APP/src/main/java/com/winlator/widget/InputControlsView.java"
+if [[ -f "$INPUT_CONTROLS_VIEW" ]]; then
+python3 - "$INPUT_CONTROLS_VIEW" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); s=p.read_text()
+if "NhhControllerRuntime.recordDispatchedEvent" not in s and "winHandler.sendGamepadState();" in s:
+    s=s.replace("winHandler.sendGamepadState();", 'winHandler.sendGamepadState();\n                com.snapix.nhhlauncher.NhhControllerRuntime.recordDispatchedEvent("GamepadState -> WinHandler");')
+p.write_text(s)
+PY
+fi
+
+echo "NHH preparation complete."

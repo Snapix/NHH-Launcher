@@ -56,7 +56,7 @@ jobs:
           APK="winlator-app/app/build/outputs/apk/debug/app-debug.apk"
           test -f "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
-          grep -q "package: name='com.winlator'" /tmp/badging.txt
+          grep -q "package: name='com.noheroshere.snap'" /tmp/badging.txt
           grep -q "No Heroes Here" /tmp/badging.txt
           grep -q "launchable-activity: name='com.snapix.nhhlauncher.MainActivity'" /tmp/badging.txt
           unzip -l "$APK" | grep -q "nhh_gameplay.gif"

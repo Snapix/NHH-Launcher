@@ -1,6 +1,7 @@
 package com.snapix.nhhlauncher
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,7 +69,7 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-private val NhhColors = darkColorScheme(
+internal val NhhColors = darkColorScheme(
     primary = Color(0xFFFF6B57),
     secondary = Color(0xFFFFC168),
     tertiary = Color(0xFF9CD6A5),

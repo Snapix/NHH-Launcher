@@ -1,5 +1,9 @@
 package com.snapix.nhhlauncher
 
+import com.winlator.box64.Box64Preset
+import com.winlator.container.Container
+import com.winlator.container.GraphicsDrivers
+
 data class LauncherRuntimeSettings(
     val resolution: String = Container.DEFAULT_SCREEN_SIZE,
     val vulkanDriver: String = GraphicsDrivers.DEFAULT_VULKAN_DRIVER,

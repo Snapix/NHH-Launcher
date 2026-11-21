@@ -70,7 +70,7 @@ object NhhControllerRuntime {
                 manager.removeProfile(profile)
             }
 
-            val template = manager.getProfile(TEMPLATE_PROFILE_ID)
+            val template = manager.getProfile(TEMPLATE_PROFILE_ID)?.takeIf { it.isVirtualGamepad }
                 ?: manager.getProfiles().firstOrNull { it.isVirtualGamepad }
                 ?: manager.getProfiles().firstOrNull()
                 ?: throw IllegalStateException("Winlator has no input-control profile.")

@@ -54,6 +54,9 @@ cp "$NHH_SOURCE/WinlatorRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhl
 cp "$NHH_SOURCE/LauncherSettingsScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/LauncherSettingsScreen.kt"
 cp "$NHH_SOURCE/NhhControllerRuntime.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/NhhControllerRuntime.kt"
 cp "$NHH_SOURCE/ControllerTestScreen.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControllerTestScreen.kt"
+cp "$NHH_SOURCE/OnboardingActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/OnboardingActivity.kt"
+cp "$NHH_SOURCE/ControlsActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControlsActivity.kt"
+cp "$NHH_SOURCE/ControllerTestActivity.kt" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/ControllerTestActivity.kt"
 rm -rf "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/cast"
 cp -r "$NHH_SOURCE/cast" "$WINLATOR_APP/src/main/java/com/snapix/nhhlauncher/"
 # 2b. Install only the two supplied NHH controller layouts.

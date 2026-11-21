@@ -49,7 +49,7 @@ method = """    @Override
         if (profile != null && w > 0 && h > 0) {
             profile.loadElements(this);
             invalidate();
-            com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(null, this);
+            com.snapix.nhhlauncher.NhhControllerRuntime.onViewportChanged(this);
         }
     }
 

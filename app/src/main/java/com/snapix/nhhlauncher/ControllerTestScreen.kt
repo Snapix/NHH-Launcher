@@ -36,7 +36,7 @@ internal fun ControllerTestScreen(
             }
             Column {
                 Text("Controller Test", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Native Winlator input pipeline", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Native game input pipeline", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -48,7 +48,7 @@ internal fun ControllerTestScreen(
                 Text("Elements: " + snapshot.elementCount)
                 Text("Virtual gamepad: " + snapshot.isVirtualGamepad)
                 Text("Touch controls: " + snapshot.touchscreenControlsEnabled)
-                Text("WinHandler: " + snapshot.winHandlerReady)
+                Text("Game input handler: " + snapshot.winHandlerReady)
                 Text("Dispatches: " + snapshot.dispatchCount)
                 Text("Last event: " + snapshot.lastDispatchEvent)
                 Text("Viewport: " + snapshot.viewportWidth + " x " + snapshot.viewportHeight)
@@ -61,7 +61,7 @@ internal fun ControllerTestScreen(
                 Text("Launch a game and press every on-screen control.")
                 Text("Hold the left stick while pressing a face button.")
                 Text("Use two or more fingers at the same time.")
-                Text("Dispatches are reported from Winlator's InputControlsView; this screen does not fake input.")
+                Text("Input events are reported from the active game session; this screen does not simulate them.")
             }
         }
 

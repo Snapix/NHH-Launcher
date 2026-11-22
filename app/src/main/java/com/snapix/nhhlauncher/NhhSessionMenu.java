@@ -21,9 +21,9 @@ public final class NhhSessionMenu {
             Runnable saveAndExit
     ) {
         final TextView badge = new TextView(activity);
-        badge.setText("NHH");
+        badge.setText("MENU");
         badge.setTextColor(0xFFFFFFFF);
-        badge.setTextSize(12f);
+        badge.setTextSize(11f);
         badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         badge.setGravity(Gravity.CENTER);
         badge.setPadding(dp(activity, 15), 0, dp(activity, 15), 0);

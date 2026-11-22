@@ -88,6 +88,9 @@ object WinlatorRuntime {
 
         if (!forceRebuild && existing != null) {
             mapGameDrive(existing, root)
+            // No Heroes Here is a Unity title. Use the Winlator-recommended Unity-safe
+            // Box64 preset rather than the generic performance preset.
+            existing.setBox64Preset(Box64Preset.STABILITY)
             existing.saveData()
             prefs.edit()
                 .putString(PREF_GAME_PATH, exe.absolutePath)
@@ -100,6 +103,7 @@ object WinlatorRuntime {
         onProgress(0.55f, "Creating the NHH game environment…")
         val container = createContainer(manager, activity)
         mapGameDrive(container, root)
+        container.setBox64Preset(Box64Preset.STABILITY)
         container.saveData()
 
         prefs.edit()

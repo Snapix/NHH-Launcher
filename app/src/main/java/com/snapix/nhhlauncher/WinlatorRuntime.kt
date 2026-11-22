@@ -281,6 +281,25 @@ object WinlatorRuntime {
         val executable = File(path).canonicalFile
         require(executable.isFile) { "The selected executable is missing." }
 
+        // Validate the game-drive mapping before entering XServer. A black XServer with only
+        // the cursor visible usually means Wine received a path that is not mounted in the container.
+        val gameDrive = container.drivesIterator().firstOrNull { it.letter.equals("G", true) }
+        require(gameDrive != null) { "NHH game drive G: is not mounted." }
+        require(executable.path.startsWith(gameDrive.path.trimEnd('/') + File.separator)) {
+            "The selected game executable is not inside the mounted G: game drive."
+        }
+        val dosExecutable = com.winlator.core.WineUtils.unixToDOSPath(executable.absolutePath, container)
+        require(dosExecutable.startsWith("G:", true)) {
+            "NHH could not convert the game path to G:. Got: $dosExecutable"
+        }
+        appendLaunchLog(
+            context,
+            "Launching executable=" + executable.absolutePath +
+                    " dos=" + dosExecutable +
+                    " container=" + container.id +
+                    " profile=" + prefs.getInt(PREF_PROFILE, NhhControllerRuntime.DEFAULT_PROFILE_ID)
+        )
+
         val profileId = prefs.getInt(PREF_PROFILE, NhhControllerRuntime.DEFAULT_PROFILE_ID)
         if (profileId != 0) NhhControllerRuntime.ensureNhhProfile(context, profileId)
 

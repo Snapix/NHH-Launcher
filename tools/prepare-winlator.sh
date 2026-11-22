@@ -497,6 +497,21 @@ if "NhhControllerRuntime.detachFromSession();" not in s:
 p.write_text(s)
 PY
 
+# NHH is a Unity game. Force Unity's direct graphics path for this session.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1])
+s=p.read_text()
+needle='        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\\\windows \\\"wfm.exe\\\"";'
+if needle not in s:
+    # Match the actual source spelling without relying on shell escaping.
+    needle='        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\\\windows \\\"wfm.exe\\\"";'
+if needle in s and 'if (nhhSession) cmdArgs += " -force-gfx-direct";' not in s:
+    s=s.replace(needle, needle+'\n\n        if (nhhSession) cmdArgs += " -force-gfx-direct";',1)
+p.write_text(s)
+PY
+
 # Report NHH guest-process termination instead of silently leaving a black XServer.
 python3 - "$XSERVER_DISPLAY" <<'PY'
 from pathlib import Path

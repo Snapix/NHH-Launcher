@@ -287,7 +287,7 @@ private fun NhhApp(activity: MainActivity) {
                         )
                         else -> Unit
                     }
-                })
+                }
             }
         }
     }

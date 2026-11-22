@@ -40,6 +40,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
+      - name: Ensure Winlator runtime source is present
+        run: |
+          set -euo pipefail
+          WINLATOR_SHA="f8a211ce7fd776de9a2642b45d166016876eaa86"
+          if [ ! -f winlator-app/app/build.gradle ]; then
+            rm -rf winlator-app
+            git clone --no-tags --depth 1 https://github.com/brunodev85/winlator-app.git winlator-app
+          fi
+          cd winlator-app
+          git fetch --no-tags --depth 1 origin "$WINLATOR_SHA"
+          git checkout --detach "$WINLATOR_SHA"
+          test -f app/build.gradle
+          test -f app/src/main/java/com/winlator/XServerDisplayActivity.java
+          grep -q 'versionName "11.2"' app/build.gradle
+
       - name: Lint shell scripts
         run: |
           for f in tools/*.sh; do

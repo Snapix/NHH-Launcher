@@ -5,9 +5,12 @@ WINLATOR_ROOT="winlator-app"
 WINLATOR_APP="$WINLATOR_ROOT/app"
 NHH_SOURCE="app/src/main/java/com/snapix/nhhlauncher"
 
-[[ -d "$WINLATOR_APP" ]] || { echo "Winlator submodule is missing"; exit 1; }
+[[ -d "$WINLATOR_APP" ]] || { echo "Winlator runtime is missing"; exit 1; }
+[[ -f "$WINLATOR_APP/build.gradle" ]] || { echo "Winlator app/build.gradle is missing"; exit 1; }
+[[ -f "$WINLATOR_APP/src/main/java/com/winlator/XServerDisplayActivity.java" ]] || { echo "Winlator XServerDisplayActivity.java is missing"; exit 1; }
+grep -q 'versionName "11.2"' "$WINLATOR_APP/build.gradle" || { echo "Unsupported Winlator app source"; exit 1; }
 
-echo "Preparing NHH launcher sources..."
+echo "Preparing NHH launcher sources against Winlator 11.2..."
 
 # 1. Enable Kotlin + Compose in the actual Winlator app module.
 python3 - "$WINLATOR_APP/build.gradle" <<'PY'

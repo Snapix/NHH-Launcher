@@ -40,6 +40,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
+      - name: Lint shell scripts
+        run: |
+          for f in tools/*.sh; do
+            bash -n "$f"
+          done
+
       - name: Prepare Winlator runtime
         run: bash tools/prepare-winlator.sh
 

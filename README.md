@@ -32,3 +32,6 @@ The Android launcher, NHH interface and NHH-specific integration are maintained 
 ## Build
 
 GitHub Actions builds a debug APK on pushes to `main` and `dev`. The workflow verifies the application ID, launcher activity, artwork and both controller profile assets.
+## Build without Git submodules
+
+If you downloaded this project as a ZIP, run `./tools/fetch-winlator.sh` before opening/building the Gradle project. GitHub Actions performs this step automatically when the Winlator source directory is absent.

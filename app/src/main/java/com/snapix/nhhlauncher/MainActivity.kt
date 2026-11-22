@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
@@ -47,7 +48,7 @@ private const val PREFS = "nhh"
 private const val GAME_DIR = "game"
 private const val GAME_EXE = "game_exe"
 
-private enum class LauncherScreen { HOME, SETTINGS, CONTROLLER_TEST }
+private enum class LauncherScreen { HOME, GAME, SETTINGS, CONTROLLER_TEST }
 private enum class SetupStage(val label: String) {
     EXTRACTING("Extracting game files…"),
     ANALYSING("Finding game executable…"),
@@ -210,10 +211,8 @@ private fun NhhApp(activity: MainActivity) {
                     { picker.launch(arrayOf("application/zip", "application/octet-stream")) }
                 )
 
-                else -> MainMenu(
-                    File(gameExe!!).name,
-                    error,
-                    onSettings = {
+                else -> {
+                    val openSettings: () -> Unit = {
                         scope.launch {
                             try {
                                 settings = WinlatorRuntime.loadSettings(context, prefs)
@@ -224,8 +223,8 @@ private fun NhhApp(activity: MainActivity) {
                                 error = t.message ?: "Could not load settings."
                             }
                         }
-                    },
-                    onRun = {
+                    }
+                    val runGame: () -> Unit = {
                         scope.launch {
                             try {
                                 setupStage = SetupStage.BOOTSTRAP
@@ -235,15 +234,24 @@ private fun NhhApp(activity: MainActivity) {
                                 )
                                 setupStage = null
                                 WinlatorRuntime.launchGame(activity, prefs)
-                            } catch (t: Throwable) {
-                                setupStage = null
-                                error = t.message ?: "Could not launch game."
+                            } catch (first: Throwable) {
+                                try {
+                                    setupStage = SetupStage.BOOTSTRAP
+                                    setupDetail = "Repairing the NHH game environment…"
+                                    WinlatorRuntime.ensureReady(
+                                        activity, File(gameExe!!), prefs,
+                                        { p, d -> setupProgress = p; setupDetail = d }, true
+                                    )
+                                    setupStage = null
+                                    WinlatorRuntime.launchGame(activity, prefs)
+                                } catch (second: Throwable) {
+                                    setupStage = null
+                                    error = "Game launch failed. ${second.message ?: first.message ?: "Unknown Winlator error."}"
+                                }
                             }
                         }
-                    },
-                    onEditControls = { activity.startActivity(Intent(activity, ControlsActivity::class.java)) },
-                    onTestController = { screen = LauncherScreen.CONTROLLER_TEST },
-                    onEnterDesktop = {
+                    }
+                    val enterDesktop: () -> Unit = {
                         scope.launch {
                             try {
                                 setupStage = SetupStage.BOOTSTRAP
@@ -259,99 +267,148 @@ private fun NhhApp(activity: MainActivity) {
                             }
                         }
                     }
-                )
+                    when (screen) {
+                        LauncherScreen.HOME -> HomeScreen(
+                            gameName = File(gameExe!!).name,
+                            onGame = { screen = LauncherScreen.GAME },
+                            onSettings = openSettings,
+                            error = error
+                        )
+                        LauncherScreen.GAME -> GameScreen(
+                            gameName = File(gameExe!!).name,
+                            error = error,
+                            onRun = runGame,
+                            onEditControls = { activity.startActivity(Intent(activity, ControlsActivity::class.java)) },
+                            onTestController = { screen = LauncherScreen.CONTROLLER_TEST },
+                            onEnterDesktop = enterDesktop,
+                            onSettings = openSettings,
+                            onHome = { screen = LauncherScreen.HOME },
+                            onReimport = { picker.launch(arrayOf("application/zip", "application/octet-stream")) }
+                        )
+                        else -> Unit
+                    }
+                })
             }
         }
     }
 }
 
 @Composable
-private fun MainMenu(
+private fun HomeScreen(
+    gameName: String,
+    onGame: () -> Unit,
+    onSettings: () -> Unit,
+    error: String?
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("NO HEROES HERE", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                Text("NHH Launcher", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings") }
+        }
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))) { AnimatedGameGif() }
+        ElevatedCard(onClick = onGame, modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("GAME", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                    Text(gameName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("OPEN", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text("Winlator runtime", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("Dedicated NHH container, Unity-safe launch arguments, touch controls and desktop mode.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!error.isNullOrBlank()) Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+            Text(error, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+        }
+        LauncherNav(active = LauncherScreen.HOME, onHome = {}, onGame = onGame, onSettings = onSettings)
+    }
+}
+
+@Composable
+private fun GameScreen(
     gameName: String,
     error: String?,
-    onSettings: () -> Unit,
     onRun: () -> Unit,
     onEditControls: () -> Unit,
     onTestController: () -> Unit,
-    onEnterDesktop: () -> Unit
+    onEnterDesktop: () -> Unit,
+    onSettings: () -> Unit,
+    onHome: () -> Unit,
+    onReimport: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("NHH", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimary)
-            }
-            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("No Heroes Here", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                Text("GAME", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
                 Text(gameName, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = onSettings) {
-                Icon(Icons.Default.Settings, "Settings")
+            IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings") }
+        }
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("No Heroes Here", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                Text("Winlator 11.2 • NHH container • Unity launch profile", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))) {
-            AnimatedGameGif()
-        }
-
-        Button(
-            onClick = onRun,
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-            shape = RoundedCornerShape(30.dp)
-        ) {
+        Button(onClick = onRun, modifier = Modifier.fillMaxWidth().height(64.dp), shape = RoundedCornerShape(18.dp)) {
             Icon(Icons.Default.PlayArrow, null)
             Spacer(Modifier.width(8.dp))
-            Text("RUN GAME", fontWeight = FontWeight.ExtraBold)
+            Text("RUN GAME", fontWeight = FontWeight.Black)
         }
-
-        FilledTonalButton(onClick = onEditControls, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Icon(Icons.Default.Gamepad, null)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(onClick = onEditControls, modifier = Modifier.weight(1f).height(56.dp)) {
+                Icon(Icons.Default.Gamepad, null)
+                Spacer(Modifier.width(6.dp))
+                Text("CONTROLS")
+            }
+            FilledTonalButton(onClick = onTestController, modifier = Modifier.weight(1f).height(56.dp)) {
+                Icon(Icons.Default.Tune, null)
+                Spacer(Modifier.width(6.dp))
+                Text("TEST")
+            }
+        }
+        OutlinedButton(onClick = onEnterDesktop, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            Icon(Icons.Default.DesktopWindows, null)
             Spacer(Modifier.width(8.dp))
-            Text("CONTROLS")
+            Text("ENTER WINLATOR DESKTOP")
         }
-
-        FilledTonalButton(onClick = onSettings, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Icon(Icons.Default.Settings, null)
+        OutlinedButton(onClick = onReimport, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Icon(Icons.Default.FolderOpen, null)
             Spacer(Modifier.width(8.dp))
-            Text("SETTINGS")
+            Text("REIMPORT GAME ZIP")
         }
-
-        OutlinedButton(
-            onClick = onEnterDesktop,
-            modifier = Modifier.fillMaxWidth().height(58.dp),
-            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.secondary)
-        ) {
-            Icon(Icons.Default.DesktopWindows, null, tint = MaterialTheme.colorScheme.secondary)
-            Spacer(Modifier.width(8.dp))
-            Text("ENTER DESKTOP", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
-        }
-
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("NHH XBOX CONTROL MAP", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text("Left Stick / D-Pad  — Move and menus")
-                Text("A / B  — Confirm / Back")
-                Text("X / Y  — Interact / Dash")
-                Text("LB / LT  — Switch")
-                Text("RB / RT  — Combat")
-                Text("Menu  — Pause")
+                Text("IN-GAME MENU", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("The MENU button, Android Back, or four-finger tap opens Resume, controls, editor, Cast and Exit.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
-        if (!error.isNullOrBlank()) {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                Text(error, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer)
-            }
+        if (!error.isNullOrBlank()) Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+            Text(error, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer)
         }
+        LauncherNav(active = LauncherScreen.GAME, onHome = onHome, onGame = {}, onSettings = onSettings)
     }
 }
 
+@Composable
+private fun LauncherNav(active: LauncherScreen, onHome: () -> Unit, onGame: () -> Unit, onSettings: () -> Unit) {
+    NavigationBar {
+        NavigationBarItem(selected = active == LauncherScreen.HOME, onClick = onHome, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
+        NavigationBarItem(selected = active == LauncherScreen.GAME, onClick = onGame, icon = { Icon(Icons.Default.PlayArrow, null) }, label = { Text("Game") })
+        NavigationBarItem(selected = active == LauncherScreen.SETTINGS, onClick = onSettings, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Settings") })
+    }
+}
 
 
 @Composable

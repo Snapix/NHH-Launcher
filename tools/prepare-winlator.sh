@@ -455,6 +455,37 @@ if "NhhControllerRuntime.detachFromSession();" not in s:
 p.write_text(s)
 PY
 
+# Report NHH guest-process termination instead of silently leaving a black XServer.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+old = "        guestProgramLauncherComponent.setTerminationCallback((status) -> exit());"
+new = """        guestProgramLauncherComponent.setTerminationCallback((status) -> {
+            if (nhhSession) {
+                runOnUiThread(() -> {
+                    try {
+                        java.io.File log = new java.io.File(getFilesDir(), "nhh-launch.log");
+                        java.io.FileWriter writer = new java.io.FileWriter(log, true);
+                        writer.write(System.currentTimeMillis() + " Guest program terminated status=" + status + "\\n");
+                        writer.close();
+                    } catch (Throwable ignored) {}
+                    com.snapix.nhhlauncher.NhhStartupOverlay.showError(
+                            this,
+                            findViewById(R.id.FLXServerDisplay),
+                            "The game process stopped before opening a window. Exit status: " + status,
+                            this::exit
+                    );
+                });
+            }
+            else exit();
+        });"""
+if old in s:
+    s = s.replace(old, new, 1)
+p.write_text(s)
+PY
+
 # 5b. Use an NHH-owned launch overlay instead of the native startup dialog.
 python3 - "$XSERVER_DISPLAY" <<'PY'
 from pathlib import Path

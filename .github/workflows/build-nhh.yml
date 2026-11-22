@@ -89,5 +89,5 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: nhh-launcher-debug
+          name: nhh-launcher-debug-${{ github.run_number }}
           path: winlator-app/app/build/outputs/apk/debug/app-debug.apk

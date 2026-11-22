@@ -465,6 +465,24 @@ if "NhhStartupOverlay.dismiss(" not in s:
     if old_map not in s:
         raise SystemExit("XServer first-window callback marker not found")
     s = s.replace(old_map, new_map, 1)
+elif "updateCursorVisibility();" in s and "if (nhhSession) runOnUiThread(()" in s:
+    s = s.replace(
+        """updateCursorVisibility();
+                    if (nhhSession) runOnUiThread(() ->
+                            com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(
+                                    findViewById(R.id.FLXServerDisplay)
+                            )
+                    );
+                    preloaderDialog.closeOnUiThread();""",
+        """xServerView.getRenderer().setCursorVisible(true);
+                    if (nhhSession) runOnUiThread(() ->
+                            com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(
+                                    findViewById(R.id.FLXServerDisplay)
+                            )
+                    );
+                    preloaderDialog.closeOnUiThread();""",
+        1
+    )
 
 if 'NhhStartupOverlay.show(this, rootView, "Launching No Heroes Here…")' not in s:
     marker = "        if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));"

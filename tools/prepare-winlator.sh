@@ -386,11 +386,6 @@ if anchor in s and insert not in s:
     s=s.replace(anchor,insert+anchor,1)
 
 # Make the existing upstream Back handler open the NHH menu during game sessions.
-python3 - "$XSERVER_DISPLAY" <<'PY'
-from pathlib import Path
-import sys
-p=Path(sys.argv[1])
-s=p.read_text()
 needle="""    @Override
     public void onBackPressed() {
 """

@@ -369,19 +369,38 @@ if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not i
         raise SystemExit("XServer setupUI marker not found")
     s = s.replace(marker, replacement, 1)
 
-# Launch the Controls Editor and return to the same session with its saved layout.
-if "private void openNhhControlsEditor()" not in s:
-    marker = "    private boolean isGenerateWineprefix() {"
-    methods = """    @Override
+# Make the existing upstream Back handler open the NHH menu during game sessions.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1])
+s=p.read_text()
+needle="""    @Override
+    public void onBackPressed() {
+"""
+start=s.find(needle)
+if start >= 0:
+    body_end=s.find("\n    }", start)
+    if body_end >= 0:
+        method_end=body_end+len("\n    }")
+        method=s[start:method_end]
+        if "nhhSession" in method:
+            replacement="""    @Override
     public void onBackPressed() {
         if (nhhSession) {
             com.snapix.nhhlauncher.NhhSessionMenu.open(findViewById(R.id.FLXServerDisplay));
             return;
         }
         super.onBackPressed();
-    }
+    }"""
+            s=s[:start]+replacement+s[method_end:]
+p.write_text(s)
+PY
 
-    private void openNhhControlsEditor() {
+# Launch the Controls Editor and return to the same session with its saved layout.
+if "private void openNhhControlsEditor()" not in s:
+    marker = "    private boolean isGenerateWineprefix() {"
+    methods = """    private void openNhhControlsEditor() {
         int profileId = getIntent().getIntExtra(
                 "nhh_controls_profile_id",
                 com.snapix.nhhlauncher.NhhControllerRuntime.DEFAULT_PROFILE_ID

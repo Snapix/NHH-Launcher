@@ -409,6 +409,12 @@ p.write_text(s)
 PY
 
 # Launch the Controls Editor and return to the same session with its saved layout.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+
 if "private void openNhhControlsEditor()" not in s:
     marker = "    private boolean isGenerateWineprefix() {"
     methods = """    private void openNhhControlsEditor() {

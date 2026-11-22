@@ -548,7 +548,16 @@ import sys
 p = Path(sys.argv[1])
 s = p.read_text()
 
-old_map = """                    preloaderDialog.closeOnUiThread();\n                    flags[0] = true;""";\nnew_map = """                    if (nhhSession) runOnUiThread(() ->\n                            com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(\n                                    findViewById(R.id.FLXServerDisplay)\n                            )\n                    );\n                    preloaderDialog.closeOnUiThread();\n                    flags[0] = true;""";\nif "NhhStartupOverlay.dismiss(" not in s:
+old_map = """                    preloaderDialog.closeOnUiThread();
+                    flags[0] = true;""";
+new_map = """                    if (nhhSession) runOnUiThread(() ->
+                            com.snapix.nhhlauncher.NhhStartupOverlay.dismiss(
+                                    findViewById(R.id.FLXServerDisplay)
+                            )
+                    );
+                    preloaderDialog.closeOnUiThread();
+                    flags[0] = true;""";
+if "NhhStartupOverlay.dismiss(" not in s:
     if old_map not in s:
         raise SystemExit("XServer first-window callback marker not found")
     s = s.replace(old_map, new_map, 1)

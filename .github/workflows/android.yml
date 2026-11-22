@@ -55,7 +55,7 @@ jobs:
           test -f gradle.properties
           test -d winlator-app/app
           grep -q 'project(":app").projectDir = file("winlator-app/app")' settings.gradle.kts
-          grep -q "com.android.tools.build:gradle:8.4.2" build.gradle
+          grep -q "com.android.tools.build:gradle:8.6.1" build.gradle
           grep -q "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24" build.gradle
 
       - name: Build debug APK

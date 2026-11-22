@@ -369,6 +369,29 @@ if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not i
         raise SystemExit("XServer setupUI marker not found")
     s = s.replace(marker, replacement, 1)
 
+# Android 13+ predictive Back does not reliably route through onBackPressed().
+# Register a direct dispatcher callback for NHH sessions so Back always opens the menu.
+python3 - "$XSERVER_DISPLAY" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1])
+s=p.read_text()
+anchor='        setupUI();'
+insert='''        if (nhhSession && android.os.Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+                    () -> com.snapix.nhhlauncher.NhhSessionMenu.open(
+                            findViewById(R.id.FLXServerDisplay)
+                    )
+            );
+        }
+
+'''
+if anchor in s and insert not in s:
+    s=s.replace(anchor,insert+anchor,1)
+p.write_text(s)
+PY
+
 # Make the existing upstream Back handler open the NHH menu during game sessions.
 python3 - "$XSERVER_DISPLAY" <<'PY'
 from pathlib import Path

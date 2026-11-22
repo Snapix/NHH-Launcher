@@ -359,6 +359,9 @@ if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not i
                     this::openNhhCast,
                     this::exit
             );
+            touchpadView.setFourFingersTapCallback(() ->
+                    com.snapix.nhhlauncher.NhhSessionMenu.open(rootView)
+            );
         }
 
         if (MainActivity.DEBUG_MODE) rootView.addView(AppUtils.createDebugMsgTextView(this));"""
@@ -369,7 +372,16 @@ if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not i
 # Launch the Controls Editor and return to the same session with its saved layout.
 if "private void openNhhControlsEditor()" not in s:
     marker = "    private boolean isGenerateWineprefix() {"
-    methods = """    private void openNhhControlsEditor() {
+    methods = """    @Override
+    public void onBackPressed() {
+        if (nhhSession) {
+            com.snapix.nhhlauncher.NhhSessionMenu.open(findViewById(R.id.FLXServerDisplay));
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    private void openNhhControlsEditor() {
         int profileId = getIntent().getIntExtra(
                 "nhh_controls_profile_id",
                 com.snapix.nhhlauncher.NhhControllerRuntime.DEFAULT_PROFILE_ID

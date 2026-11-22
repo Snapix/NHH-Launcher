@@ -539,6 +539,8 @@ if "The game environment could not start." not in s:
         raise SystemExit("XServer startup worker marker not found")
     s = s.replace(worker_old, worker_new, 1)
 
+# Final compatibility guard: this upstream revision has no updateCursorVisibility().
+s = s.replace("updateCursorVisibility();", "xServerView.getRenderer().setCursorVisible(true);")
 p.write_text(s)
 PY
 

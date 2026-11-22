@@ -10,6 +10,7 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 
 public final class NhhSessionMenu {
+    private static final int TAG_KEY = android.R.id.custom;
     private NhhSessionMenu() {}
 
     public static View attach(
@@ -28,7 +29,8 @@ public final class NhhSessionMenu {
         badge.setPadding(dp(activity, 15), 0, dp(activity, 15), 0);
         badge.setMinHeight(dp(activity, 34));
         badge.setElevation(dp(activity, 8));
-        badge.setContentDescription("NHH session menu");
+        badge.setContentDescription("Open NHH game menu");
+        badge.setTag(TAG_KEY, Boolean.TRUE);
 
         GradientDrawable background = new GradientDrawable();
         background.setColor(0xFFE94B43);
@@ -36,23 +38,7 @@ public final class NhhSessionMenu {
         background.setStroke(dp(activity, 1), 0x55FFFFFF);
         badge.setBackground(background);
 
-        badge.setOnClickListener(anchor -> {
-            PopupMenu popup = new PopupMenu(activity, badge);
-            popup.getMenu().add("Resume").setOnMenuItemClickListener(item -> true);
-            popup.getMenu().add("Edit Controls").setOnMenuItemClickListener(item -> {
-                editControls.run();
-                return true;
-            });
-            popup.getMenu().add("Cast").setOnMenuItemClickListener(item -> {
-                cast.run();
-                return true;
-            });
-            popup.getMenu().add("Save and exit").setOnMenuItemClickListener(item -> {
-                saveAndExit.run();
-                return true;
-            });
-            popup.show();
-        });
+        badge.setOnClickListener(anchor -> showMenu(activity, badge, editControls, cast, saveAndExit));
 
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -63,7 +49,45 @@ public final class NhhSessionMenu {
         params.rightMargin = dp(activity, 12);
         parent.addView(badge, params);
         badge.bringToFront();
+        parent.post(() -> {
+            badge.bringToFront();
+            badge.setVisibility(View.VISIBLE);
+        });
         return badge;
+    }
+
+    public static void open(FrameLayout parent) {
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            if (Boolean.TRUE.equals(child.getTag(TAG_KEY))) {
+                child.performClick();
+                return;
+            }
+        }
+    }
+
+    private static void showMenu(
+            Activity activity,
+            View anchor,
+            Runnable editControls,
+            Runnable cast,
+            Runnable saveAndExit
+    ) {
+        PopupMenu popup = new PopupMenu(activity, anchor);
+        popup.getMenu().add("Resume").setOnMenuItemClickListener(item -> true);
+        popup.getMenu().add("Edit Controls").setOnMenuItemClickListener(item -> {
+            editControls.run();
+            return true;
+        });
+        popup.getMenu().add("Cast").setOnMenuItemClickListener(item -> {
+            cast.run();
+            return true;
+        });
+        popup.getMenu().add("Save and exit").setOnMenuItemClickListener(item -> {
+            saveAndExit.run();
+            return true;
+        });
+        popup.show();
     }
 
     private static int dp(Activity activity, float value) {

@@ -375,12 +375,17 @@ if "NhhControllerRuntime.attachToSession(this, inputControlsView, xServer" not i
 # Android 13+ predictive Back does not reliably route through onBackPressed().
 # Register a direct dispatcher callback for NHH sessions so Back always opens the menu.
 anchor='        setupUI();'
-insert='''        if (nhhSession && android.os.Build.VERSION.SDK_INT >= 33) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY,
-                    () -> com.snapix.nhhlauncher.NhhSessionMenu.open(
-                            findViewById(R.id.FLXServerDisplay)
-                    )
+insert='''        if (nhhSession) {
+            getOnBackPressedDispatcher().addCallback(
+                    this,
+                    new androidx.activity.OnBackPressedCallback(true) {
+                        @Override
+                        public void handleOnBackPressed() {
+                            com.snapix.nhhlauncher.NhhSessionMenu.open(
+                                    findViewById(R.id.FLXServerDisplay)
+                            );
+                        }
+                    }
             );
         }
 
@@ -504,7 +509,7 @@ needle='        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\\\windows \\\"wfm.exe
 if needle not in s:
     # Match the actual source spelling without relying on shell escaping.
     needle='        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\\\windows \\\"wfm.exe\\\"";'
-if needle in s and 'if (nhhSession) cmdArgs += " -force-gfx-direct";' not in s:
+if needle in s and 'if (nhhSession) cmdArgs += " -force-gfx-direct -screen-fullscreen 0 -popupwindow";' not in s:
     s=s.replace(needle, needle+'\n\n        if (nhhSession) cmdArgs += " -force-gfx-direct";',1)
 p.write_text(s)
 PY
